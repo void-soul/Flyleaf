@@ -44,7 +44,7 @@ public class M3UPlaylist
     private static List<M3UPlaylistItem> Parse(TextReader reader)
     {
         string line;
-        List<M3UPlaylistItem> items = new();
+        List<M3UPlaylistItem> items = [];
 
         while ((line = reader.ReadLine()) != null)
         {

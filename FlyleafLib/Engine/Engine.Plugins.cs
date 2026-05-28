@@ -7,7 +7,7 @@ namespace FlyleafLib;
 public class PluginsEngine
 {
     public Dictionary<string, PluginType>
-                    Types       { get; private set; } = new Dictionary<string, PluginType>();
+                    Types       { get; private set; } = [];
 
     public string   Folder      { get; private set; }
 

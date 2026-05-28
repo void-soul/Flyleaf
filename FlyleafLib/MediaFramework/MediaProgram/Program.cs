@@ -45,7 +45,7 @@ public class Program
         Streams = streams;
 
         // Load metadata
-        Dictionary<string, string> metadata = new();
+        Dictionary<string, string> metadata = [];
         AVDictionaryEntry* b = null;
         while (true)
         {

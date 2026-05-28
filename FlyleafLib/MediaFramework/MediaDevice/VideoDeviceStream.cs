@@ -59,7 +59,7 @@ public class VideoDeviceStream : DeviceStreamBase
     #region VideoFormatsViaMediaSource
     public static IList<VideoDeviceStream> GetVideoFormatsForVideoDevice(string friendlyName, string symbolicLink)
     {
-        List<VideoDeviceStream> formatList = new();
+        List<VideoDeviceStream> formatList = [];
 
         using (var mediaSource = GetMediaSourceFromVideoDevice(symbolicLink))
         {

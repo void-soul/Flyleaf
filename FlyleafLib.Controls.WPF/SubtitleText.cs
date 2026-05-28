@@ -21,7 +21,7 @@ namespace FlyleafLib.Controls.WPF
         public OutlinedTextBlock()
         {
             UpdatePen();
-            TextDecorations = new TextDecorationCollection();
+            TextDecorations = [];
         }
 
         #region dependency properties

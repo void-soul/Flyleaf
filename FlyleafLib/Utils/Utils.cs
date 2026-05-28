@@ -222,7 +222,7 @@ public static partial class Utils
 
     public static List<string> GetMoviesSorted(List<string> movies)
     {
-        List<string> moviesSorted = new();
+        List<string> moviesSorted = [];
 
         for (int i = 0; i < movies.Count; i++)
         {
@@ -267,7 +267,7 @@ public static partial class Utils
 
     public static List<Language> GetSystemLanguages()
     {
-        List<Language> Languages = new();
+        List<Language> Languages = [];
         if (CultureInfo.CurrentCulture.ThreeLetterISOLanguageName != "eng")
             Languages.Add(Language.Get(CultureInfo.CurrentCulture));
 
@@ -560,7 +560,7 @@ public static partial class Utils
     {
         PerformanceCounterCategory category = new("GPU Engine");
         string[] counterNames = category.GetInstanceNames();
-        gpuCounters = new List<PerformanceCounter>();
+        gpuCounters = [];
 
         foreach (string counterName in counterNames)
             if (counterName.EndsWith("engtype_3D"))

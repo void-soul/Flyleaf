@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 using static FlyleafLib.Utils;
 using static FlyleafPlayer.AppConfig;
@@ -52,6 +53,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     bool            closed = false;
     static object   lockTray = new();
 
+    private DispatcherTimer _keyRepeatTimer;
+    private Key _currentPressedKey = Key.None;
+
     public MainWindow()
     {
         lock (lockTray) openedWindows++;
@@ -89,6 +93,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         InitializeComponent();
         DataContext = FlyleafME; // Allowing FlyleafHost to access our Player
+
+        // Initialize key repeat timer
+        _keyRepeatTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(100) // Repeat every 100ms
+        };
+        _keyRepeatTimer.Tick += KeyRepeatTimer_Tick;
     }
     void X_Closing(object sender, CancelEventArgs e)
     {
@@ -867,6 +878,58 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         await Task.Delay(MSG_TIMEOUT, cancelMsgToken.Token);
         UIInvoke(() => { msg = ""; PropertyChanged?.Invoke(this, new(nameof(Msg))); });
+    }
+    #endregion
+
+    #region Keyboard Shortcuts for Frame Navigation
+    private void Window_KeyDown(object sender, KeyEventArgs e)
+    {
+        // Handle E key for next frame
+        if (e.Key == Key.E && _currentPressedKey != Key.E)
+        {
+            _currentPressedKey = Key.E;
+            Player.Commands.ShowFrameNext.Execute(null);
+            _keyRepeatTimer.Start();
+            e.Handled = true;
+        }
+        // Handle Q key for previous frame
+        else if (e.Key == Key.Q && _currentPressedKey != Key.Q)
+        {
+            _currentPressedKey = Key.Q;
+            Player.Commands.ShowFramePrev.Execute(null);
+            _keyRepeatTimer.Start();
+            e.Handled = true;
+        }
+    }
+
+    private void Window_KeyUp(object sender, KeyEventArgs e)
+    {
+        // Stop repeat when E or Q key is released
+        if (e.Key == Key.E && _currentPressedKey == Key.E)
+        {
+            _currentPressedKey = Key.None;
+            _keyRepeatTimer.Stop();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Q && _currentPressedKey == Key.Q)
+        {
+            _currentPressedKey = Key.None;
+            _keyRepeatTimer.Stop();
+            e.Handled = true;
+        }
+    }
+
+    private void KeyRepeatTimer_Tick(object sender, EventArgs e)
+    {
+        // Execute the appropriate command based on which key is held
+        if (_currentPressedKey == Key.E)
+        {
+            Player.Commands.ShowFrameNext.Execute(null);
+        }
+        else if (_currentPressedKey == Key.Q)
+        {
+            Player.Commands.ShowFramePrev.Execute(null);
+        }
     }
     #endregion
 }

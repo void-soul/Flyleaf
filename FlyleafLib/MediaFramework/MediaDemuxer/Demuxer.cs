@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using System.Windows.Data;
 
 using static FlyleafLib.Config;
@@ -1191,6 +1191,24 @@ public unsafe class Demuxer : RunThreadBase
                 if (IsHLSLive)
                     UpdateHLSTime();
 
+                // BLOT MODIFICATION START: Dynamic duration update for growing MPEGTS files
+                // Purpose: Allow player to auto-refresh progress bar when playing recording TS files
+                // Date: 2024
+                // See: FLYLEAF_MODIFICATIONS.md for upgrade instructions
+                if (Name == "mpegts" && packet->pts != NoTs)
+                {
+                    var stream = AVStreamToStream[packet->stream_index];
+                    long currentPtsTicks = (long)(packet->pts * stream.Timebase);
+                    if (currentPtsTicks > Duration)
+                    {
+                        Duration = currentPtsTicks;
+                        fmtCtx->duration = Duration / 10; // FFmpeg duration is in AV_TIME_BASE (usually 1,000,000)
+                        IsLive = true;                    // Force player to treat it as a growing stream
+                        HLSDurationChanged?.Invoke(Duration);
+                    }
+                }
+                // BLOT MODIFICATION END
+
                 if (CanTrace)
                 {
                     var stream = AVStreamToStream[packet->stream_index];
@@ -1724,7 +1742,7 @@ public unsafe class Demuxer : RunThreadBase
         else if (Name == "mpeg")
             return "mpeg";
 
-        List<string> supportedOutput = new() { "mp4", "avi", "flv", "flac", "mpeg", "mpegts", "mkv", "ogg", "ts"};
+        List<string> supportedOutput = ["mp4", "avi", "flv", "flac", "mpeg", "mpegts", "mkv", "ogg", "ts"];
         string defaultExtenstion = "mp4";
         bool hasPcm = false;
         bool isRaw = false;

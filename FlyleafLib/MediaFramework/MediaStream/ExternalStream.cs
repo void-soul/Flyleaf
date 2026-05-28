@@ -13,7 +13,7 @@ public class ExternalStream : DemuxerInput
     public string   Codec           { get; set; }
     public long     BitRate         { get; set; }
     public Dictionary<string, object>
-                    Tag             { get; set; } = new Dictionary<string, object>();
+                    Tag             { get; set; } = [];
     public void AddTag(object tag, string pluginName)
     {
         if (Tag.ContainsKey(pluginName))

@@ -54,7 +54,7 @@ public static class ParseSubtitles
     {
         int pos = 0;
         string sout = "";
-        styles = new List<SubStyle>();
+        styles = [];
 
         SubStyle bold       = new(SubStyles.BOLD);
         SubStyle italic     = new(SubStyles.ITALIC);

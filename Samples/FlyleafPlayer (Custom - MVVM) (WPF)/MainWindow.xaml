@@ -8,7 +8,8 @@
         xmlns:fl="clr-namespace:FlyleafLib.Controls.WPF;assembly=FlyleafLib"
 
         mc:Ignorable="d"
-        Title="Flyleaf Player (Custom - MVVM)" Height="650" Width="800" Background="Black">
+        Title="Flyleaf Player (Custom - MVVM)" Height="650" Width="800" Background="Black"
+        KeyDown="Window_KeyDown" KeyUp="Window_KeyUp">
 
     <Grid>
         <fl:FlyleafHost Player="{Binding Player}" KeyBindings="Surface">

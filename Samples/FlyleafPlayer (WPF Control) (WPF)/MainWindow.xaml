@@ -19,7 +19,8 @@
         Title="Flyleaf" WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"
 
         MinWidth="150" MinHeight="80"
-        Height="450" Width="800" WindowStartupLocation="CenterScreen" Loaded="Window_Loaded" Icon="/Flyleaf.ico">
+        Height="450" Width="800" WindowStartupLocation="CenterScreen" Loaded="Window_Loaded" Icon="/Flyleaf.ico"
+        KeyDown="Window_KeyDown" KeyUp="Window_KeyUp">
 
     <Window.Resources>
         <d:ResourceDictionary Source="pack://application:,,,/FlyleafLib.Controls.WPF;component/Resources/MaterialDesignColors.xaml"/>
