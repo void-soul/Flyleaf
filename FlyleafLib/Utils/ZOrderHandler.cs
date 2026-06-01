@@ -39,8 +39,8 @@ public static partial class Utils
             public Window Window;
             public IntPtr WindowHwnd;
 
-            Dictionary<string, IntPtr> WindowNamesHandles = [];
-            Dictionary<string, Window> WindowNamesWindows = [];
+            Dictionary<string, IntPtr> WindowNamesHandles = new();
+            Dictionary<string, Window> WindowNamesWindows = new();
 
             public Owner(Window window, IntPtr windowHwnd)
             {
@@ -144,7 +144,7 @@ public static partial class Utils
 
             public List<ZOrder> GetZOrder()
             {
-                List<ZOrder> zorders = [];
+                List<ZOrder> zorders = new();
 
                 foreach(Window window in Window.OwnedWindows)
                 {
@@ -171,7 +171,7 @@ public static partial class Utils
             }
         }
 
-        public static Dictionary<IntPtr, Owner> Owners = [];
+        public static Dictionary<IntPtr, Owner> Owners = new();
 
         public static void Register(Window window)
         {

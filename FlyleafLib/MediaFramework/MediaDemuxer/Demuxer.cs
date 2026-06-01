@@ -511,28 +511,31 @@ public unsafe class Demuxer : RunThreadBase
                  *  - avformat_flush will release it but messes with the initial seek position (possible seek to start to force it releasing it but still we have the delay)
                  *  
                  * Consider
-                 *  - DVD/Blu-ray/mpegts only? (possible HLS -> mpegts?*)
+                 *  - DVD/Blu-ray/mpegts only? (possible HLS -> mpegts?*) | seen also with "matroska,webm"
                  *  - Re-open in case of "Consider increasing the value for the 'analyzeduration'" (catch from ffmpeg log)
-                 *  
+                 *
+                 *
+                 *  Currently disabled to avoid increasing delay/memory and we should try to re-fill info from the decoder (currently from subs renderer)
+                 *
                  *  https://github.com/SuRGeoNix/Flyleaf/issues/502
                  */
 
-                if (Name == "mpegts")
-                {
-                    bool requiresMoreAnalyse = false;
+                //if (Name == "mpegts")
+                //{
+                //    bool requiresMoreAnalyse = false;
 
-                    for (int i = 0; i < fmtCtx->nb_streams; i++)
-                        if (fmtCtx->streams[i]->codecpar->codec_id == AVCodecID.HdmvPgsSubtitle ||
-                            fmtCtx->streams[i]->codecpar->codec_id == AVCodecID.DvdSubtitle
-                            )
-                            { requiresMoreAnalyse = true; break; }
+                //    for (int i = 0; i < fmtCtx->nb_streams; i++)
+                //        if (fmtCtx->streams[i]->codecpar->codec_id == AVCodecID.HdmvPgsSubtitle ||
+                //            fmtCtx->streams[i]->codecpar->codec_id == AVCodecID.DvdSubtitle
+                //            )
+                //            { requiresMoreAnalyse = true; break; }
 
-                    if (requiresMoreAnalyse)
-                    {
-                        fmtCtx->probesize = Math.Max(fmtCtx->probesize, 5000 * (long)1024 * 1024); // Bytes
-                        fmtCtx->max_analyze_duration = Math.Max(fmtCtx->max_analyze_duration, 1000 * (long)1000 * 1000); // Mcs
-                    }
-                }
+                //    if (requiresMoreAnalyse)
+                //    {
+                //        fmtCtx->probesize = Math.Max(fmtCtx->probesize, 5000 * (long)1024 * 1024); // Bytes
+                //        fmtCtx->max_analyze_duration = Math.Max(fmtCtx->max_analyze_duration, 1000 * (long)1000 * 1000); // Mcs
+                //    }
+                //}
 
                 ret = avformat_find_stream_info(fmtCtx, null);
                 if (ret == AVERROR_EXIT || Status != Status.Opening || Interrupter.ForceInterrupt == 1) return error = "Cancelled";
@@ -1119,6 +1122,10 @@ public unsafe class Demuxer : RunThreadBase
         bool gotAVERROR_EXIT = false;
         audioBufferLimitFired = false;
 
+        // BLOT MODIFICATION: EOF retry counter for growing MPEGTS files
+        const int MAX_MPEGTS_EOF_RETRIES = 60; // 60 * 500ms = 30 seconds max wait for new data
+        int mpegtsEofRetries = 0;
+
         do
         {
             // Wait until not QueueFull
@@ -1170,6 +1177,17 @@ public unsafe class Demuxer : RunThreadBase
 
                     if (ret == AVERROR_EOF)
                     {
+                        // BLOT MODIFICATION: For growing MPEGTS files, don't end immediately
+                        // Wait for new data to be appended by the recording process
+                        // After maxEofRetries with no new data, treat as real EOF
+                        if (Name == "mpegts" && mpegtsEofRetries < MAX_MPEGTS_EOF_RETRIES)
+                        {
+                            mpegtsEofRetries++;
+                            gotAVERROR_EXIT = true;
+                            Thread.Sleep(500);
+                            continue;
+                        }
+
                         Status = Status.Ended;
                         break;
                     }
@@ -1182,6 +1200,9 @@ public unsafe class Demuxer : RunThreadBase
                     gotAVERROR_EXIT = true;
                     continue;
                 }
+
+                // BLOT MODIFICATION: Reset EOF retry counter on successful read
+                mpegtsEofRetries = 0;
 
                 TotalBytes += packet->size;
 

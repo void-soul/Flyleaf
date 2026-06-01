@@ -258,10 +258,20 @@ unsafe partial class Player
                 if (vFrame == null)
                 {
                     if (decoderHasEnded)
+                    {
                         OnBufferingCompleted();
-                    else
-                        Log.Warn("[V] Buffer Empty");
+                        break;
+                    }
 
+                    // BLOT MODIFICATION: For live/growing streams, retry buffering instead of stopping
+                    if (isLive)
+                    {
+                        Log.Warn("[V] Buffer Empty (live) - retrying");
+                        requiresBuffering = true;
+                        continue;
+                    }
+
+                    Log.Warn("[V] Buffer Empty");
                     break;
                 }
 

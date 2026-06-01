@@ -13,7 +13,7 @@ public class PLSPlaylist
 
     public static List<PLSPlaylistItem> Parse(string filename)
     {
-        List<PLSPlaylistItem> items = [];
+        List<PLSPlaylistItem> items = new();
         string res;
         int entries = 1000;
 

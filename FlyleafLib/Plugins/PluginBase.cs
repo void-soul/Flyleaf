@@ -61,7 +61,7 @@ public abstract class PluginBase : PluginType, IPlugin
     public object GetTag(PlaylistItem item)
         => item?.GetTag(Name);
 
-    public virtual Dictionary<string, string> GetDefaultOptions() => [];
+    public virtual Dictionary<string, string> GetDefaultOptions() => new();
 }
 public class PluginType
 {
