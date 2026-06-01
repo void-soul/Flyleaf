@@ -55,7 +55,8 @@
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal">
-                        <Button Content="OpenFromClipboard" Command="{Binding Player.Commands.OpenFromClipboard}"/>
+                        <Button Content="CC" Click="Button_Click" />
+                        <Button Content="OpenFromClipboard" Command="{Binding Player.Commands.OpenFromClipboard}" />
                         <Button Content="OpenFromFileDialog" Command="{Binding Player.Commands.OpenFromFileDialog}"/>
                     </StackPanel>
 

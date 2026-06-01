@@ -40,7 +40,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             FFmpegLogLevel  = Flyleaf.FFmpeg.LogLevel.Warn,
             #endif
 
-            PluginsPath     = ":Plugins",
+            //PluginsPath     = ":Plugins",
             FFmpegPath      = ":FFmpeg",
 
             // Use UIRefresh to update Stats/BufferDuration (and CurTime more frequently than a second)
@@ -147,4 +147,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler PropertyChanged;
+
+    private void Button_Click(object sender, RoutedEventArgs e)
+    {
+        Player.Open("http://10.98.30.99/mjpeg_stream");
+    }
 }

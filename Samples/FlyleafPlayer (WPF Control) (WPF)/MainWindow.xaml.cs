@@ -181,6 +181,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             FlyleafME.Player = Player;
             FlyleafME.Overlay.Closing += X_Closing;
             FlyleafME.Surface.Closing += X_Closing;
+            FlyleafME.Player.Open("http://10.98.30.99/mjpeg_stream");
         });
 
         if (runOnce)
