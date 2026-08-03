@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Windows.Data;
 
 using static FlyleafLib.Config;
@@ -511,28 +511,31 @@ public unsafe class Demuxer : RunThreadBase
                  *  - avformat_flush will release it but messes with the initial seek position (possible seek to start to force it releasing it but still we have the delay)
                  *  
                  * Consider
-                 *  - DVD/Blu-ray/mpegts only? (possible HLS -> mpegts?*)
+                 *  - DVD/Blu-ray/mpegts only? (possible HLS -> mpegts?*) | seen also with "matroska,webm"
                  *  - Re-open in case of "Consider increasing the value for the 'analyzeduration'" (catch from ffmpeg log)
+                 *  
+                 *  
+                 *  Currently disabled to avoid increasing delay/memory and we should try to re-fill info from the decoder (currently from subs renderer)
                  *  
                  *  https://github.com/SuRGeoNix/Flyleaf/issues/502
                  */
 
-                if (Name == "mpegts")
-                {
-                    bool requiresMoreAnalyse = false;
+                //if (Name == "mpegts")
+                //{
+                //    bool requiresMoreAnalyse = false;
 
-                    for (int i = 0; i < fmtCtx->nb_streams; i++)
-                        if (fmtCtx->streams[i]->codecpar->codec_id == AVCodecID.HdmvPgsSubtitle ||
-                            fmtCtx->streams[i]->codecpar->codec_id == AVCodecID.DvdSubtitle
-                            )
-                            { requiresMoreAnalyse = true; break; }
+                //    for (int i = 0; i < fmtCtx->nb_streams; i++)
+                //        if (fmtCtx->streams[i]->codecpar->codec_id == AVCodecID.HdmvPgsSubtitle ||
+                //            fmtCtx->streams[i]->codecpar->codec_id == AVCodecID.DvdSubtitle
+                //            )
+                //            { requiresMoreAnalyse = true; break; }
 
-                    if (requiresMoreAnalyse)
-                    {
-                        fmtCtx->probesize = Math.Max(fmtCtx->probesize, 5000 * (long)1024 * 1024); // Bytes
-                        fmtCtx->max_analyze_duration = Math.Max(fmtCtx->max_analyze_duration, 1000 * (long)1000 * 1000); // Mcs
-                    }
-                }
+                //    if (requiresMoreAnalyse)
+                //    {
+                //        fmtCtx->probesize = Math.Max(fmtCtx->probesize, 5000 * (long)1024 * 1024); // Bytes
+                //        fmtCtx->max_analyze_duration = Math.Max(fmtCtx->max_analyze_duration, 1000 * (long)1000 * 1000); // Mcs
+                //    }
+                //}
 
                 ret = avformat_find_stream_info(fmtCtx, null);
                 if (ret == AVERROR_EXIT || Status != Status.Opening || Interrupter.ForceInterrupt == 1) return error = "Cancelled";
@@ -1119,6 +1122,11 @@ public unsafe class Demuxer : RunThreadBase
         bool gotAVERROR_EXIT = false;
         audioBufferLimitFired = false;
 
+        // BLOT MODIFICATION: EOF retry counter for growing MPEGTS files
+        // See FLYLEAF_MODIFICATIONS.md (mod #2)
+        const int MAX_MPEGTS_EOF_RETRIES = 60; // 60 * 500ms = 30s max wait for new data
+        int mpegtsEofRetries = 0;
+
         do
         {
             // Wait until not QueueFull
@@ -1170,6 +1178,18 @@ public unsafe class Demuxer : RunThreadBase
 
                     if (ret == AVERROR_EOF)
                     {
+                        // BLOT MODIFICATION: For growing MPEGTS files, don't end immediately —
+                        // the recording process may still be appending data. After MAX retries
+                        // with no new data, treat as a real EOF.
+                        // See FLYLEAF_MODIFICATIONS.md (mod #2)
+                        if (Name == "mpegts" && mpegtsEofRetries < MAX_MPEGTS_EOF_RETRIES)
+                        {
+                            mpegtsEofRetries++;
+                            gotAVERROR_EXIT = true;
+                            Thread.Sleep(500);
+                            continue;
+                        }
+
                         Status = Status.Ended;
                         break;
                     }
@@ -1184,6 +1204,10 @@ public unsafe class Demuxer : RunThreadBase
                 }
 
                 TotalBytes += packet->size;
+
+                // BLOT MODIFICATION: Reset EOF retry counter on successful read
+                // See FLYLEAF_MODIFICATIONS.md (mod #2)
+                mpegtsEofRetries = 0;
 
                 // Skip Disabled Streams | TODO: It's possible that the streams will changed (add/remove or even update/change of codecs)
                 if (!EnabledStreams.Contains(packet->stream_index)) { av_packet_unref(packet); continue; }
@@ -1742,7 +1766,7 @@ public unsafe class Demuxer : RunThreadBase
         else if (Name == "mpeg")
             return "mpeg";
 
-        List<string> supportedOutput = ["mp4", "avi", "flv", "flac", "mpeg", "mpegts", "mkv", "ogg", "ts"];
+        List<string> supportedOutput = new() { "mp4", "avi", "flv", "flac", "mpeg", "mpegts", "mkv", "ogg", "ts"};
         string defaultExtenstion = "mp4";
         bool hasPcm = false;
         bool isRaw = false;

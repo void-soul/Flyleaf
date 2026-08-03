@@ -258,10 +258,24 @@ unsafe partial class Player
                 if (vFrame == null)
                 {
                     if (decoderHasEnded)
+                    {
                         OnBufferingCompleted();
-                    else
-                        Log.Warn("[V] Buffer Empty");
+                        break;
+                    }
 
+                    // BLOT MODIFICATION: For live / growing streams (e.g. an MPEGTS file still
+                    // being written by the recorder), the demuxer may be parked in EOF retry
+                    // (see Demuxer.cs mod #2) and the decoder queue temporarily drained.
+                    // Instead of stopping playback, keep buffering and retry.
+                    // See FLYLEAF_MODIFICATIONS.md (mod #3)
+                    if (isLive)
+                    {
+                        Log.Warn("[V] Buffer Empty (live) - retrying");
+                        requiresBuffering = true;
+                        continue;
+                    }
+
+                    Log.Warn("[V] Buffer Empty");
                     break;
                 }
 

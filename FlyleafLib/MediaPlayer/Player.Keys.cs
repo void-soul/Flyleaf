@@ -74,7 +74,7 @@ partial class Player
             player.onKeyUpBinding = null; // In case of keyboard lost capture (should be handled from hosts)
         }
 
-        List<KeyBinding> keysList = [];
+        List<KeyBinding> keysList = new();
         var spanList = CollectionsMarshal.AsSpan(player.Config.Player.KeyBindings.Keys); // should create dictionary here with key+alt+ctrl+shift hash
         foreach(var binding in spanList)
             if (binding.Key == key)
@@ -143,7 +143,7 @@ public class KeysConfig
 
     internal void SetPlayer(Player player)
     {
-        Keys ??= [];
+        Keys ??= new List<KeyBinding>();
 
         if (!player.Config.Loaded && Keys.Count == 0)
             LoadDefault();
@@ -276,7 +276,7 @@ public class KeysConfig
     public void LoadDefault()
     {
         if (Keys == null)
-            Keys = [];
+            Keys = new List<KeyBinding>();
         else
             Keys.Clear();
 

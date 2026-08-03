@@ -348,3 +348,7 @@ FlyleafLib/FlyleafLib.xml
 
 # YT-DLP
 yt-dlp.exe
+
+
+**/*tmp*
+**/verifyout
