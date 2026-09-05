@@ -41,29 +41,59 @@ public unsafe class CustomIOContext
 
     int IORead(void* opaque, byte* buffer, int bufferSize)
     {
-        int ret;
+        // BLOT MODIFICATION START: Never let managed exceptions cross the native boundary
+        // (av_read_frame -> AVIOCallback -> here). A throw unwinds through FFmpeg native frames and
+        // fail-fasts the process when the underlying Stream is torn down mid-flight during rapid
+        // seeks/frame-stepping. Degrade to AVERROR_EXIT instead.
+        // See FLYLEAF_MODIFICATIONS.md (mod #5)
+        try
+        {
+            int ret;
 
-        if (demuxer.Interrupter.ShouldInterrupt(null) != 0) return AVERROR_EXIT;
+            if (stream == null) return AVERROR_EXIT; // disposed mid-flight -> polite error, not a crash
 
-        ret = demuxer.CustomIOContext.stream.Read(new Span<byte>(buffer, bufferSize));
+            if (demuxer.Interrupter.ShouldInterrupt(null) != 0) return AVERROR_EXIT;
 
-        if (ret > 0)
-            return ret;
+            ret = demuxer.CustomIOContext.stream.Read(new Span<byte>(buffer, bufferSize));
 
-        if (ret == 0)
-            return AVERROR_EOF;
+            if (ret > 0)
+                return ret;
 
-        demuxer.Log.Warn("CustomIOContext Interrupted");
+            if (ret == 0)
+                return AVERROR_EOF;
 
-        return AVERROR_EXIT;
+            demuxer.Log.Warn("CustomIOContext Interrupted");
+
+            return AVERROR_EXIT;
+        }
+        catch (Exception e)
+        {
+            try { demuxer?.Log?.Warn($"CustomIOContext IORead failed: {e.Message}"); } catch { }
+            return AVERROR_EXIT;
+        }
+        // BLOT MODIFICATION END
     }
 
     long IOSeek(void* opaque, long offset, IOSeekFlags whence)
     {
-        //System.Diagnostics.Debug.WriteLine($"** S | {decCtx.demuxer.fmtCtx->pb->pos} - {decCtx.demuxer.ioStream.Position}");
+        // BLOT MODIFICATION START: see IORead - exceptions must never cross the native boundary
+        // See FLYLEAF_MODIFICATIONS.md (mod #5)
+        try
+        {
+            //System.Diagnostics.Debug.WriteLine($"** S | {decCtx.demuxer.fmtCtx->pb->pos} - {decCtx.demuxer.ioStream.Position}");
 
-        return whence == IOSeekFlags.Size
-            ? demuxer.CustomIOContext.stream.Length
-            : demuxer.CustomIOContext.stream.Seek(offset, (SeekOrigin) whence);
+            return whence == IOSeekFlags.Size
+                ? demuxer.CustomIOContext.stream.Length
+                : demuxer.CustomIOContext.stream.Seek(offset, (SeekOrigin) whence);
+        }
+        catch (Exception e)
+        {
+            try { demuxer?.Log?.Warn($"CustomIOContext IOSeek failed: {e.GetType().Name}: {e.Message}"); } catch { }
+            // SEEK to a position failed -> report -1 (AVSEEK fail) so FFmpeg does NOT read from a
+            // guessed/wrong offset (position corruption is worse than a hard error). Only the
+            // "Size" probe legitimately returns the stream length; null stream -> 0.
+            return whence == IOSeekFlags.Size ? (demuxer?.CustomIOContext?.stream?.Length ?? 0) : -1;
+        }
+        // BLOT MODIFICATION END
     }
 }

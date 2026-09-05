@@ -1127,6 +1127,9 @@ public unsafe class Demuxer : RunThreadBase
         const int MAX_MPEGTS_EOF_RETRIES = 60; // 60 * 500ms = 30s max wait for new data
         int mpegtsEofRetries = 0;
 
+        // BLOT MODIFICATION (2b): pending EOF-retry wait (ms), performed OUTSIDE lockFmtCtx
+        int eofRetryWaitMs = 0;
+
         do
         {
             // Wait until not QueueFull
@@ -1186,8 +1189,12 @@ public unsafe class Demuxer : RunThreadBase
                         {
                             mpegtsEofRetries++;
                             gotAVERROR_EXIT = true;
-                            Thread.Sleep(500);
-                            continue;
+                            // BLOT MODIFICATION (2b): sleep moved OUTSIDE lockFmtCtx — sleeping here held the
+                            // format-context lock up to 500ms per retry (up to ~30s at EOF), queuing/blocking
+                            // concurrent Seek()/av_seek_frame while rapid seek/frame-stepping piled up and
+                            // raced still-running native ops (av_read_frame crash). See FLYLEAF_MODIFICATIONS.md
+                            eofRetryWaitMs = 500;
+                            break; // leaves only the lock block; outer loop waits outside the lock, then reads
                         }
 
                         Status = Status.Ended;
@@ -1312,6 +1319,12 @@ public unsafe class Demuxer : RunThreadBase
                     packet = av_packet_alloc();
                 }
             }
+
+            // BLOT MODIFICATION START (2b): EOF-retry wait executed OUTSIDE lockFmtCtx so concurrent
+            // Seek()/frame ops never queue behind a sleeping demuxer. Semantics unchanged: still up to
+            // 60 retries, counter resets on successful read. See FLYLEAF_MODIFICATIONS.md (mod #2b)
+            if (eofRetryWaitMs > 0) { Thread.Sleep(eofRetryWaitMs); eofRetryWaitMs = 0; }
+            // BLOT MODIFICATION END
         } while (Status == Status.Running);
     }
     private void RunInternalReverse()
@@ -1803,59 +1816,88 @@ public unsafe class Demuxer : RunThreadBase
     /// Gets next VideoPacket from the existing queue or demuxes it if required (Demuxer must not be running)
     /// </summary>
     /// <returns>0 on success</returns>
-    public int GetNextVideoPacket()
+    // BLOT MODIFICATION START (#8): out-packet ownership transfer. The frame-step path used to assign the
+    // shared 'packet' FIELD (packet = VideoPackets.Dequeue()) and then send/unref it — while the demuxer
+    // thread (re-buffering after a seek/pause) concurrently reuses the SAME field for its own
+    // av_read_frame / av_packet_alloc -> double-unref / use-after-free -> native heap corruption ->
+    // ExecutionEngineException (fail-fast, uncatchable). Now the caller owns a private packet.
+    // See FLYLEAF_MODIFICATIONS.md (mod #8)
+    public int GetNextVideoPacket(out AVPacket* pkt)
     {
-        if (!VideoPackets.IsEmpty)
-        {
-            packet = VideoPackets.Dequeue();
+        pkt = VideoPackets.Dequeue(); // thread-safe (PacketQueue locks itself); null when empty
+        if (pkt != null)
             return 0;
-        }
-        else
-            return GetNextPacket(VideoStream.StreamIndex);
+
+        return GetNextPacket(VideoStream.StreamIndex, out pkt);
     }
+    // BLOT MODIFICATION END (#8)
 
     /// <summary>
     /// Pushes the demuxer to the next available packet (Demuxer must not be running)
     /// </summary>
     /// <param name="streamIndex">Packet's stream index</param>
     /// <returns>0 on success</returns>
-    public int GetNextPacket(int streamIndex = -1)
+    // BLOT MODIFICATION START (#8): same rationale as GetNextVideoPacket above — demux into a LOCAL
+    // packet and transfer ownership via 'out'. The shared 'packet' field is never touched here anymore
+    // (it remains exclusively owned by the demuxer thread's RunInternal).
+    public int GetNextPacket(int streamIndex, out AVPacket* pkt)
     {
         int ret;
+        pkt = null;
+        AVPacket* localPacket = av_packet_alloc();
 
         while (true)
         {
-            Interrupter.ReadRequest();
-            ret = av_read_frame(fmtCtx, packet);
+            bool eofStop = false;
+            // BLOT MODIFICATION START: serialise av_read_frame with the demuxer thread. This method is
+            // invoked from the frame-step path (VideoDecoder.GetFrameNext/GetFrame -> DecodeFrameNext) on
+            // the UI thread while the demuxer thread concurrently runs av_read_frame under lockFmtCtx.
+            // Without the lock both threads call av_read_frame on the SAME AVFormatContext -> native heap
+            // corruption / AccessViolationException in av_read_frame (fail-fasts the process, cannot be
+            // caught by #4/#5's managed try/catch). Mirror DecoderContext.GetVideoFrame which already
+            // locks lockFmtCtx. Reentrant (Monitor) so nesting under GetFrame's own lock is safe.
+            // NOTE: Stop() below is intentionally performed OUTSIDE the lock - Stop() waits for the
+            // demuxer thread to exit, which would deadlock if that thread were parked on lockFmtCtx.
+            // See FLYLEAF_MODIFICATIONS.md (mod #6)
+            lock (lockFmtCtx)
+            {
+                Interrupter.ReadRequest();
+                ret = av_read_frame(fmtCtx, localPacket);
 
+                if (ret != 0)
+                {
+                    av_packet_unref(localPacket);
+
+                    if ((ret == AVERROR_EXIT && fmtCtx->pb != null && fmtCtx->pb->eof_reached != 0) || ret == AVERROR_EOF)
+                    {
+                        // Hand out an EMPTY drain packet (caller sends it to flush the decoder).
+                        // After the unref above, data==null and size==0 already.
+                        eofStop = true;
+                        pkt = localPacket; // ownership -> caller
+                    }
+                }
+                else if (streamIndex != -1 ? localPacket->stream_index == streamIndex
+                                           : EnabledStreams.Contains(localPacket->stream_index))
+                {
+                    pkt = localPacket;    // ownership -> caller
+                    return 0;
+                }
+                else
+                {
+                    av_packet_unref(localPacket);
+                }
+            } // BLOT MODIFICATION END (mod #6)
+
+            if (eofStop) { Stop(); Status = Status.Ended; }
             if (ret != 0)
             {
-                av_packet_unref(packet);
-
-                if ((ret == AVERROR_EXIT && fmtCtx->pb != null && fmtCtx->pb->eof_reached != 0) || ret == AVERROR_EOF)
-                {
-                    packet = av_packet_alloc();
-                    packet->data = null;
-                    packet->size = 0;
-
-                    Stop();
-                    Status = Status.Ended;
-                }
-
+                if (pkt == null)
+                    av_packet_free(&localPacket); // non-EOF error: nothing handed to the caller
                 return ret;
             }
-
-            if (streamIndex != -1)
-            {
-                if (packet->stream_index == streamIndex)
-                    return 0;
-            }
-            else if (EnabledStreams.Contains(packet->stream_index))
-                return 0;
-            
-            av_packet_unref(packet);
         }
     }
+    // BLOT MODIFICATION END (#8)
     #endregion
 }
 

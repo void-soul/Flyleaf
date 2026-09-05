@@ -1031,18 +1031,38 @@ public unsafe class VideoDecoder : DecoderBase
         long requiredTimestamp = GetFrameTimestamp(frameNumber);
         long curSeekMcs = requiredTimestamp / 10;
         int curFrameNumber;
+        int ret;
 
         do
         {
             demuxer.Pause();
             Pause();
             demuxer.Interrupter.SeekRequest();
-            int ret = av_seek_frame(demuxer.FormatContext, -1, curSeekMcs - curFixSeekDelta, SeekFlags.Frame | SeekFlags.Backward);
+            // BLOT MODIFICATION START: serialise av_seek_frame with the demuxer thread. GetFrame is the
+            // frame-step path (ShowFramePrev/ShowFrame) but it did NOT take demuxer.lockFmtCtx, so its
+            // av_seek_frame raced the demuxer thread's av_read_frame on the SAME AVFormatContext -> native
+            // heap corruption / AccessViolationException in av_read_frame (fail-fast, uncatchable by #4/#5).
+            // Mirror DecoderContext.GetVideoFrame which already locks lockFmtCtx. Reentrant (Monitor).
+            // See FLYLEAF_MODIFICATIONS.md (mod #6)
+            lock (demuxer.lockFmtCtx)
+            {
+                ret = av_seek_frame(demuxer.FormatContext, -1, curSeekMcs - curFixSeekDelta, SeekFlags.Frame | SeekFlags.Backward);
 
-            if (ret < 0)
-                ret = av_seek_frame(demuxer.FormatContext, -1, Math.Max((curSeekMcs - (long)TimeSpan.FromSeconds(1).TotalMicroseconds) - curFixSeekDelta, demuxer.StartTime / 10), SeekFlags.Frame);
-            
-            demuxer.DisposePackets();
+                if (ret < 0)
+                    ret = av_seek_frame(demuxer.FormatContext, -1, Math.Max((curSeekMcs - (long)TimeSpan.FromSeconds(1).TotalMicroseconds) - curFixSeekDelta, demuxer.StartTime / 10), SeekFlags.Frame);
+
+                // BLOT MODIFICATION START (#6b): DisposePackets (clears the demuxer's AVPacket queues)
+                // used to run OUTSIDE lockFmtCtx, racing the demuxer thread's enqueue (lockFmtCtx) and the
+                // decoder thread's RecvFrame/Dequeue (lockCodecCtx) on the same queues -> concurrent
+                // av_packet free vs use -> native heap corruption (ExecutionEngineException later).
+                // Take both locks; order lockFmtCtx -> lockCodecCtx matches DecoderContext.GetVideoFrame.
+                // Lock order note: DecoderContext.Seek takes codec->fmt, but it runs on the same UI thread
+                // under lockActions as GetFrame (mutually exclusive), so no AB-BA here.
+                // See FLYLEAF_MODIFICATIONS.md (mod #6b)
+                lock (lockCodecCtx)
+                    demuxer.DisposePackets();
+                // BLOT MODIFICATION END (#6b)
+            } // BLOT MODIFICATION END (mod #6)
 
             if (demuxer.Status == Status.Ended)
                 demuxer.Status = Status.Stopped;
@@ -1112,6 +1132,11 @@ public unsafe class VideoDecoder : DecoderBase
     {
         int ret;
         int allowedErrors = Config.Decoder.MaxErrors;
+        // BLOT MODIFICATION START (#8): GetNextVideoPacket() now returns the packet ownership to the caller
+        // (FFmpeg-allocated; caller must av_packet_free) instead of leaving it queued inside the demuxer for
+        // the next GetNextPacket() call to unref — the old model double-freed on rapid seek/frame-step and
+        // leaked when ret != 0 paths returned early. See FLYLEAF_MODIFICATIONS.md (mod #8)
+        AVPacket* pkt = null;
 
         if (checkExtraFrames)
         {
@@ -1133,15 +1158,22 @@ public unsafe class VideoDecoder : DecoderBase
 
         while (true)
         {
-            ret = demuxer.GetNextVideoPacket();
+            ret = demuxer.GetNextVideoPacket(out pkt);
             if (ret != 0)
             {
-                if (demuxer.Status != Status.Ended)
+                if (demuxer.Status != Status.Ended || pkt == null)
                     return ret;
 
-                // Drain (TBR: probably only first drained working here)
-                ret = avcodec_send_packet(codecCtx, demuxer.packet);
-                av_packet_unref(demuxer.packet);
+                // BLOT MODIFICATION START (#7): the drained packet is now caller-owned (pkt from
+                // GetNextVideoPacket(out pkt)); send it inside lockCodecCtx (it races the decoder
+                // thread's avcodec_receive_frame which holds the same codec) and free it after.
+                // See FLYLEAF_MODIFICATIONS.md (mod #7)
+                lock (lockCodecCtx)
+                {
+                    ret = avcodec_send_packet(codecCtx, pkt);
+                    av_packet_free(&pkt);
+                }
+                // BLOT MODIFICATION END (#7)
 
                 if (ret != 0)
                     return AVERROR_EOF;
@@ -1150,28 +1182,36 @@ public unsafe class VideoDecoder : DecoderBase
                 return DecodeFrameNext();
             }
 
-            if (keyPacketRequired)
+            // BLOT MODIFICATION START (#7): serialise avcodec_send_packet with DecodeFrameNextInternal's
+            // avcodec_receive_frame — both touch codecCtx concurrently (decoder thread decode vs UI-thread
+            // frame-step drain). The packet is caller-owned now (mod #8): send it, then av_packet_free it.
+            // See FLYLEAF_MODIFICATIONS.md (mod #7)
+            lock (lockCodecCtx)
             {
-                if (!demuxer.packet->flags.HasFlag(PktFlags.Key) && demuxer.packet->pts != startPts)
+                if (keyPacketRequired)
                 {
-                    if (CanDebug) Log.Debug("Ignoring non-key packet");
-                    av_packet_unref(demuxer.packet);
-                    continue;
+                    if (!pkt->flags.HasFlag(PktFlags.Key) && pkt->pts != startPts)
+                    {
+                        if (CanDebug) Log.Debug("Ignoring non-key packet");
+                        av_packet_free(&pkt);
+                        continue;
+                    }
+
+                    keyFrameRequired  = checkKeyFrame && pkt->pts != startPts;
+                    keyPacketRequired = false;
                 }
 
-                keyFrameRequired  = checkKeyFrame && demuxer.packet->pts != startPts;
-                keyPacketRequired = false;
+                ret = avcodec_send_packet(codecCtx, pkt);
+
+                if (swFallback) // Should use 'global' packet to reset it in get_format (same packet should use also from DecoderContext)
+                {
+                    SWFallback();
+                    ret = avcodec_send_packet(codecCtx, pkt);
+                }
+
+                av_packet_free(&pkt);
             }
-
-            ret = avcodec_send_packet(codecCtx, demuxer.packet);
-
-            if (swFallback) // Should use 'global' packet to reset it in get_format (same packet should use also from DecoderContext)
-            {
-                SWFallback();
-                ret = avcodec_send_packet(codecCtx, demuxer.packet);
-            }
-
-            av_packet_unref(demuxer.packet);
+            // BLOT MODIFICATION END (#7)
 
             if (ret != 0 && ret != AVERROR(EAGAIN))
             {
@@ -1193,42 +1233,50 @@ public unsafe class VideoDecoder : DecoderBase
     }
     private int DecodeFrameNextInternal()
     {
-        int ret = avcodec_receive_frame(codecCtx, frame);
-        if (ret != 0) { av_frame_unref(frame); return ret; }
-
-        if (keyFrameRequired)
+        // BLOT MODIFICATION START (#7): wrap the whole body in lockCodecCtx so the UI-thread frame-step
+        // path and the decoder thread's recv/decode path are mutually exclusive on codecCtx (receive_frame
+        // and send_packet on the same codec must not interleave; Monitor is reentrant so decoder paths that
+        // already run under lockCodecCtx can call back in). See FLYLEAF_MODIFICATIONS.md (mod #7)
+        lock (lockCodecCtx)
         {
-            if (!frame->flags.HasFlag(FrameFlags.Key)) { av_frame_unref(frame); DecodeFrameNextInternal(); }
-            keyFrameRequired = false;
-        }
+            int ret = avcodec_receive_frame(codecCtx, frame);
+            if (ret != 0) { av_frame_unref(frame); return ret; }
 
-        if (frame->best_effort_timestamp != AV_NOPTS_VALUE)
-            frame->pts = frame->best_effort_timestamp;
-
-        else if (frame->pts == AV_NOPTS_VALUE)
-        {
-            if (!VideoStream.FixTimestamps)
+            if (keyFrameRequired)
             {
-                av_frame_unref(frame);
-
-                return DecodeFrameNextInternal();
+                if (!frame->flags.HasFlag(FrameFlags.Key)) { av_frame_unref(frame); DecodeFrameNextInternal(); }
+                keyFrameRequired = false;
             }
 
-            frame->pts = lastFixedPts + VideoStream.StartTimePts;
-            lastFixedPts += av_rescale_q(VideoStream.FrameDuration / 10, Engine.FFmpeg.AV_TIMEBASE_Q, VideoStream.AVStream->time_base);
+            if (frame->best_effort_timestamp != AV_NOPTS_VALUE)
+                frame->pts = frame->best_effort_timestamp;
+
+            else if (frame->pts == AV_NOPTS_VALUE)
+            {
+                if (!VideoStream.FixTimestamps)
+                {
+                    av_frame_unref(frame);
+
+                    return DecodeFrameNextInternal();
+                }
+
+                frame->pts = lastFixedPts + VideoStream.StartTimePts;
+                lastFixedPts += av_rescale_q(VideoStream.FrameDuration / 10, Engine.FFmpeg.AV_TIMEBASE_Q, VideoStream.AVStream->time_base);
+            }
+
+            if (StartTime == NoTs)
+                StartTime = (long)(frame->pts * VideoStream.Timebase) - demuxer.StartTime;
+
+            if (!filledFromCodec) // Ensures we have a proper frame before filling from codec
+            {
+                ret = FillFromCodec(frame);
+                if (ret == -1234)
+                    return -1;
+            }
+
+            return 0;
         }
-
-        if (StartTime == NoTs)
-            StartTime = (long)(frame->pts * VideoStream.Timebase) - demuxer.StartTime;
-
-        if (!filledFromCodec) // Ensures we have a proper frame before filling from codec
-        {
-            ret = FillFromCodec(frame);
-            if (ret == -1234)
-                return -1;
-        }
-
-        return 0;
+        // BLOT MODIFICATION END (#7)
     }
 
     #region Dispose

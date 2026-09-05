@@ -137,7 +137,24 @@ public abstract class RunThreadBase : NotifyPropertyChanged
 
         do
         {
-            RunInternal();
+            // BLOT MODIFICATION START: Guard the thread runloop. An unhandled managed exception here
+            // (Demuxer/Decoder RunInternal or any AVIO callback unwinding through FFmpeg native frames)
+            // fail-fasts and kills the whole process (.NET Core/.NET 5+ default policy). Degrade to a
+            // clean Stopping state + log instead of crashing BlotEyes.Player.exe on rapid seek/frame ops.
+            // See FLYLEAF_MODIFICATIONS.md (mod #4)
+            try
+            {
+                RunInternal();
+            }
+            catch (Exception e)
+            {
+                Log.Error($"Unhandled exception in {threadName} ({Status}): {e}");
+
+                lock (lockStatus)
+                    if (Status == Status.Running || Status == Status.QueueFull || Status == Status.QueueEmpty || Status == Status.Draining)
+                        Status = Status.Stopping; // exits outer loop -> post-loop sets Status.Stopped
+            }
+            // BLOT MODIFICATION END
 
             if (Status == Status.Pausing)
             {

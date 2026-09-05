@@ -16,6 +16,23 @@ public unsafe class Interrupter
 
     internal int ShouldInterrupt(void* opaque)
     {
+        // BLOT MODIFICATION START: called by FFmpeg from inside av_read_frame etc.; a managed throw
+        // escaping this callback fail-fasts the process. Degrade to "no interrupt".
+        // See FLYLEAF_MODIFICATIONS.md (mod #5)
+        try
+        {
+            return ShouldInterruptCore(opaque);
+        }
+        catch (Exception e)
+        {
+            try { demuxer?.Log?.Warn($"ShouldInterrupt failed: {e.Message}"); } catch { }
+            return 0;
+        }
+        // BLOT MODIFICATION END
+    }
+
+    private int ShouldInterruptCore(void* opaque)
+    {
         if (demuxer.Status == Status.Stopping)
         {
             if (CanDebug) demuxer.Log.Debug($"{Requester} Interrupt (Stopping) !!!");

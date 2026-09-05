@@ -12,7 +12,7 @@ public unsafe partial class Renderer
     long            renderRequestAt, lastRenderAt;
     volatile bool   canIdle;
     volatile bool   isIdleRunning;
-    object          lockRenderLoops = new();
+    internal object lockRenderLoops = new(); // BLOT (Q-0319): internal so SwapChain teardown can share the render lock
 
     internal void RenderRequest(VideoFrame frame = null, bool forceClear = false)
     {
@@ -88,6 +88,11 @@ public unsafe partial class Renderer
 
             lock (lockRenderLoops)
             {
+                // BLOT MODIFICATION (Q-0319): re-check under the render lock — the swap
+                // chain may have been disposed while we waited for the lock (see RenderPlay).
+                if (SwapChain.Disposed || !SwapChain.CanPresent)
+                    return true;
+
                 bool needsClear = true;
                 if (VideoProcessor == VideoProcessors.D3D11)
                 {
@@ -178,6 +183,12 @@ public unsafe partial class Renderer
             
             lock (lockRenderLoops)
             {
+                // BLOT MODIFICATION (Q-0319): re-check under the render lock — the swap
+                // chain may have been disposed while we waited for the lock (we passed
+                // the CanPresent check before FlyleafHost.SetPlayer flipped it).
+                if (SwapChain.Disposed || !SwapChain.CanPresent)
+                    return true;
+
                 if (VideoProcessor == VideoProcessors.D3D11)
                 {
                     D3ProcessRequests();

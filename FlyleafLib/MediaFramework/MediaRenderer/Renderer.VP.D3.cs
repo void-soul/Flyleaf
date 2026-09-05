@@ -581,7 +581,10 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
     }
     void D3Render(VideoFrame frame, bool secondField)
     {
-        if (frame.VPIV == null)
+        // BLOT MODIFICATION (Q-0319): guard against concurrent swap chain / video
+        // processor teardown (rapid player switching) — VideoProcessorBlt on a
+        // disposed output view crashes the render thread.
+        if (frame.VPIV == null || vp == null || SwapChain.VPOV == null)
             return; // TODO: when we dispose on switch
 
         /* [Undocumented Deinterlace]

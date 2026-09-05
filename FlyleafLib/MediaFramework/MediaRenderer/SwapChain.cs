@@ -228,9 +228,13 @@ public unsafe class SwapChain
             if (Disposed)
                 return;
 
+            // BLOT MODIFICATION (Q-0319): flip CanPresent before anything else so render
+            // loops (RenderPlay/RenderIdle/PresentPlay check it before touching the swap
+            // chain) stop using this swap chain while we tear its resources down.
+            CanPresent = false;
+
             Renderer.ClearScreen(force: true, rendererFrame: rendererFrame);
             Disposed = true;
-            CanPresent = false;
 
             if (WinUIClbk != null)
             {
@@ -243,38 +247,46 @@ public unsafe class SwapChain
 
             RemoveSubClass();
 
-            if (dcClip != null)
+            // BLOT MODIFICATION (Q-0319): dispose GPU resources under lockRenderLoops.
+            // The render path (RenderPlay/RenderIdle) uses VPOV/BackBuffer while holding
+            // this lock; without it, a play thread that passed the CanPresent check just
+            // before it flipped could VideoProcessorBlt on a disposed output view
+            // (crash on rapid player switching, e.g. quick group zoom / file playback).
+            lock (Renderer.lockRenderLoops)
             {
-                dcClip.Dispose();
-                dcClip = null;
-            }
+                if (dcClip != null)
+                {
+                    dcClip.Dispose();
+                    dcClip = null;
+                }
 
-            if (dcTarget != null)
-            {
-                dcTarget.SetRoot(null);
-                dcTarget.Dispose();
-                dcTarget = null;
-            }
+                if (dcTarget != null)
+                {
+                    dcTarget.SetRoot(null);
+                    dcTarget.Dispose();
+                    dcTarget = null;
+                }
 
-            if (dcVisual != null)
-            {
-                dcVisual.SetContent(null);
-                dcVisual.Dispose();
-                dcVisual = null;
-            }
+                if (dcVisual != null)
+                {
+                    dcVisual.SetContent(null);
+                    dcVisual.Dispose();
+                    dcVisual = null;
+                }
 
-            DisposeHelper();
+                DisposeHelper();
 
-            if (sc != null)
-            {
-                sc.Dispose();
-                sc = null;
-            }
+                if (sc != null)
+                {
+                    sc.Dispose();
+                    sc = null;
+                }
 
-            if (dcDevice != null)
-            {
-                dcDevice.Dispose();
-                dcDevice = null;
+                if (dcDevice != null)
+                {
+                    dcDevice.Dispose();
+                    dcDevice = null;
+                }
             }
 
             if (CanInfo)
