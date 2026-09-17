@@ -16,7 +16,7 @@ namespace FlyleafLib.MediaFramework.MediaRenderer;
 public unsafe partial class Renderer
 {
     public bool                     D3Disposed      { get; private set; } = true;
-    object lockD3 = new();
+    readonly object lockD3 = new();
 
     public VideoFrameFormat         FieldType       { get; private set; } = VideoFrameFormat.Progressive;
     public bool                     SuperResolution { get; private set; }
@@ -40,7 +40,7 @@ public unsafe partial class Renderer
     };
     static VideoProcessorOutputViewDescription  vpovd = new() { ViewDimension = VideoProcessorOutputViewDimension.Texture2D };
 
-    VideoProcessorStream[]          vpsa        = [new() { Enable = true }];
+    readonly VideoProcessorStream[]          vpsa        = [new() { Enable = true }];
     VideoProcessorInputViewDescription
                                     vpivd       = new()
         {
@@ -67,7 +67,7 @@ public unsafe partial class Renderer
         MipLevels   = 1,
         SampleDescription = new(1, 0)
     };
-    RenderTargetViewDescription[]   d3rtvDesc   = new RenderTargetViewDescription[2];
+    readonly RenderTargetViewDescription[]   d3rtvDesc   = new RenderTargetViewDescription[2];
     FillPlanesDelegate              D3FillPlanesStage;
 
     bool                            d3CanPresent; // Don't render / present during out of bounds viewport
@@ -469,9 +469,9 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
     [StructLayout(LayoutKind.Sequential)]
     struct SuperResNvidia(bool enable)
     {
-        uint version = 0x1;
-        uint method  = 0x2;
-        uint enabled = enable ? 1u : 0u;
+        readonly uint version = 0x1;
+        readonly uint method  = 0x2;
+        readonly uint enabled = enable ? 1u : 0u;
     }
     static readonly SuperResNvidia  SuperResEnabledNvidia   = new(true);
     static readonly SuperResNvidia  SuperResDisabledNvidia  = new(false);

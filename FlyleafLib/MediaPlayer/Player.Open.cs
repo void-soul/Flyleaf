@@ -686,7 +686,7 @@ unsafe partial class Player
         => Playlist.Selected != null && (item == null || item.Index == Playlist.Selected.Index)
         ? GetCurrentSession()
         : item != null && item.GetTag(playerSessionTag) != null ? (Session)item.GetTag(playerSessionTag) : null;
-    string playerSessionTag = "_session";
+    readonly string playerSessionTag = "_session";
     private Session GetCurrentSession()
     {
         Session session     = new();
@@ -996,12 +996,12 @@ unsafe partial class Player
         }
     }
 
-    ConcurrentStack<OpenAsyncData> openInputs   = new();
-    ConcurrentStack<OpenAsyncData> openSessions = new();
-    ConcurrentStack<OpenAsyncData> openItems    = new();
-    ConcurrentStack<OpenAsyncData> openVideo    = new();
-    ConcurrentStack<OpenAsyncData> openAudio    = new();
-    ConcurrentStack<OpenAsyncData> openSubtitles= new();
+    readonly ConcurrentStack<OpenAsyncData> openInputs   = new();
+    readonly ConcurrentStack<OpenAsyncData> openSessions = new();
+    readonly ConcurrentStack<OpenAsyncData> openItems    = new();
+    readonly ConcurrentStack<OpenAsyncData> openVideo    = new();
+    readonly ConcurrentStack<OpenAsyncData> openAudio    = new();
+    readonly ConcurrentStack<OpenAsyncData> openSubtitles= new();
     #endregion
 }
 

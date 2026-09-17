@@ -73,9 +73,9 @@ public class Activity : NotifyPropertyChanged
     public int  Timeout             { get => _Timeout; set { _Timeout = value; IsEnabled = value > 0; } }
     int _Timeout;
 
-    Player player;
-    Stopwatch swKeyboard = new();
-    Stopwatch swMouse = new();
+    readonly Player player;
+    readonly Stopwatch swKeyboard = new();
+    readonly Stopwatch swMouse = new();
 
     public Activity(Player player) => this.player = player;
 
@@ -150,7 +150,7 @@ public class Activity : NotifyPropertyChanged
 
     #region Ensures we catch the mouse move even when the Cursor is hidden
     static bool isCursorHidden;
-    static object cursorLocker = new();
+    static readonly object cursorLocker = new();
     public class GlobalMouseHandler : IMessageFilter
     {
         public bool PreFilterMessage(ref Message m)

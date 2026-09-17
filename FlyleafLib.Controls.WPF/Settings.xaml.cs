@@ -15,7 +15,7 @@ namespace FlyleafLib.Controls.WPF;
 
 public partial class Settings : UserControl, INotifyPropertyChanged
 {
-    FlyleafME flyleaf;
+    readonly FlyleafME flyleaf;
 
     public Settings(FlyleafME flyleaf)
     {

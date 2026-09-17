@@ -143,7 +143,7 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
 
     Thickness   subsInitialMargin;
 
-    bool        isDesignMode = (bool) DesignerProperties.IsInDesignModeProperty.GetMetadata(typeof(DependencyObject)).DefaultValue;
+    readonly bool        isDesignMode = (bool) DesignerProperties.IsInDesignModeProperty.GetMetadata(typeof(DependencyObject)).DefaultValue;
 
     public override void SetPlayer(Player oldPlayer)
     {
@@ -513,9 +513,9 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
     public void SetSubsPositionYAction(object y) { Thickness t = UIConfig.SubsMargin; t.Bottom += int.Parse(y.ToString()); UIConfig.SubsMargin = t; }
 
     public ICommand SetSubtitlesFont    { get; set; }
-    static FontWeightConverter  fontWeightConv  = new();
-    static FontStyleConverter   fontStyleConv   = new();
-    static FontStretchConverter fontStretchConv = new();
+    static readonly FontWeightConverter  fontWeightConv  = new();
+    static readonly FontStyleConverter   fontStyleConv   = new();
+    static readonly FontStretchConverter fontStretchConv = new();
     public void SetSubtitlesFontAction(object obj = null)
     {
         ColorFontDialog dialog = new()

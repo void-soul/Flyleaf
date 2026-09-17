@@ -963,7 +963,7 @@ public partial class DecoderContext
             if (Playlist.InputType == InputType.Web)
             {
                 formatOpt = Config.Demuxer.GetFormatOptPtr(demuxer.Type);
-                copied = new Dictionary<string, string>();
+                copied = [];
 
                 foreach (var opt in formatOpt)
                     copied.Add(opt.Key, opt.Value);

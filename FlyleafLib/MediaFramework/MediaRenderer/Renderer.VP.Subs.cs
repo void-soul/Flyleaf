@@ -24,7 +24,7 @@ public unsafe partial class Renderer
         BindFlags           = BindFlags.ShaderResource,
         SampleDescription   = new(1, 0)
     };
-    ID3D11ShaderResourceView[]  subsSRV = new ID3D11ShaderResourceView[1];
+    readonly ID3D11ShaderResourceView[]  subsSRV = new ID3D11ShaderResourceView[1];
     RectI                       subsRect;
     SizeI                       subsSize;
     Size                        subsLastViewport;

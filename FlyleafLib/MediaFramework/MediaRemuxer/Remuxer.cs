@@ -10,12 +10,12 @@ public unsafe class Remuxer
     public bool                 HasStreams          => mapInOutStreams2.Count > 0 || mapInOutStreams.Count > 0;
     public bool                 HeaderWritten       { get; private set; }
 
-    Dictionary<IntPtr, IntPtr>  mapInOutStreams     = [];
-    Dictionary<int, IntPtr>     mapInInStream       = [];
+    readonly Dictionary<IntPtr, IntPtr>  mapInOutStreams     = [];
+    readonly Dictionary<int, IntPtr>     mapInInStream       = [];
     Dictionary<int, long>       mapInStreamToDts    = [];
-    Dictionary<IntPtr, IntPtr>  mapInOutStreams2    = [];
-    Dictionary<int, IntPtr>     mapInInStream2      = [];
-    Dictionary<int, long>       mapInStreamToDts2   = [];
+    readonly Dictionary<IntPtr, IntPtr>  mapInOutStreams2    = [];
+    readonly Dictionary<int, IntPtr>     mapInInStream2      = [];
+    readonly Dictionary<int, long>       mapInStreamToDts2   = [];
 
     AVFormatContext* fmtCtx;
     AVOutputFormat* fmt;

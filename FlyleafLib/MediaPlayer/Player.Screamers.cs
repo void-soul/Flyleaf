@@ -51,7 +51,7 @@ unsafe partial class Player
     long    onBufferingStarted;
     long    onBufferingCompleted;
 
-    Stopwatch sw = new();
+    readonly Stopwatch sw = new();
 
     private void ShowOneFrame()
     {

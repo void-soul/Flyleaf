@@ -40,7 +40,7 @@ public class AudioEngine : CallbackBase, IMMNotificationClient, INotifyPropertyC
     #endregion
 
     IMMDeviceEnumerator deviceEnum;
-    private object      locker = new();
+    private readonly object      locker = new();
 
     public event PropertyChangedEventHandler PropertyChanged;
 

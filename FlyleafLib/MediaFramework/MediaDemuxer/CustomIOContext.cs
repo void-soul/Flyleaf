@@ -4,7 +4,7 @@ public unsafe class CustomIOContext
 {
     AVIOContext*    avioCtx;
     public Stream   stream;
-    Demuxer         demuxer;
+    readonly Demuxer         demuxer;
 
     public CustomIOContext(Demuxer demuxer)
     {

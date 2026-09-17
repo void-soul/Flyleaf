@@ -11,7 +11,7 @@ public class VideoCache
     public bool         IsEmpty     => Count == 0;
     public VideoFrame   Next        => Current?.Next;
 
-    DecoderConfig       dcfg;
+    readonly DecoderConfig       dcfg;
     internal VideoFrame RendererFrame, First, Last, Current;
     long                curId;
     bool                isCurrentNext;

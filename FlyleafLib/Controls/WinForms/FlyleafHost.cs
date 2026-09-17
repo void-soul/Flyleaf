@@ -87,8 +87,8 @@ public partial class FlyleafHost : UserControl, IHostPlayer, INotifyPropertyChan
     Size oldSize = Size.Empty;
     FormBorderStyle oldStyle = FormBorderStyle.None;
     Control oldParent = null;
-    LogHandler Log;
-    bool designMode = LicenseManager.UsageMode == LicenseUsageMode.Designtime;
+    readonly LogHandler Log;
+    readonly bool designMode = LicenseManager.UsageMode == LicenseUsageMode.Designtime;
     static int idGenerator;
 
     private class FlyleafHostDropWrap { public FlyleafHost FlyleafHost; } // To allow non FlyleafHosts to drag & drop

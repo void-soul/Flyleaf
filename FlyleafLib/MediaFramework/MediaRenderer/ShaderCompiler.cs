@@ -21,7 +21,7 @@ internal static partial class ShaderCompiler
     internal static Blob    VSSimpleBlob    = Compile(VSSimple, false);
 
     class BlobWrapper { public Blob blob; } // For locking per Blob (before creation)
-    static Dictionary<string, BlobWrapper> cache = [];
+    static readonly Dictionary<string, BlobWrapper> cache = [];
 
     internal static ID3D11PixelShader CompilePS(ID3D11Device device, string uniqueId, ReadOnlySpan<char> hlslSample, List<string> defines = null)
     {

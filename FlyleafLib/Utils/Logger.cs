@@ -12,12 +12,12 @@ public static class Logger
     public   static Action<string> CustomOutput = DevNullPtr;
     internal static Action<string> Output       = DevNullPtr;
 
-    static ConcurrentQueue<byte[]>
+    static readonly ConcurrentQueue<byte[]>
                         fileData = [];
     static bool         fileTaskRunning;
     static FileStream   fileStream;
-    static object       lockFileStream = new();
-    static Dictionary<LogLevel, string>
+    static readonly object       lockFileStream = new();
+    static readonly Dictionary<LogLevel, string>
                         logLevels = [];
 
     static Logger()

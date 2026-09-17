@@ -99,12 +99,7 @@ public unsafe class StreamSuggester : PluginBase, ISuggestPlaylistItem, ISuggest
         stream = null;
         extStream = null;
 
-        List<Language> langs = new();
-
-        foreach (var lang in Config.Subtitles.Languages)
-            langs.Add(lang);
-
-        langs.Add(Language.Unknown);
+        List<Language> langs = [.. Config.Subtitles.Languages, Language.Unknown];
 
         var extStreams = Selected.ExternalSubtitlesStreams.OrderBy(x => x.Language.ToString()).ThenByDescending(x => x.Rating).ThenBy(x => x.Downloaded);
 

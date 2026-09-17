@@ -32,8 +32,8 @@ public class Subtitles : NotifyPropertyChanged
 
     public Player Player => player;
 
-    Action uiAction;
-    Player player;
+    readonly Action uiAction;
+    readonly Player player;
     DecoderContext decoder => player?.decoder;
 
     public Subtitles(Player player)

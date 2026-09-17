@@ -17,8 +17,8 @@ public class Data : NotifyPropertyChanged
     public bool IsOpened { get => isOpened; internal set => Set(ref _IsOpened, value); }
     internal bool   _IsOpened, isOpened;
 
-    Action uiAction;
-    Player player;
+    readonly Action uiAction;
+    readonly Player player;
     DecoderContext decoder => player.decoder;
     Config Config => player.Config;
 

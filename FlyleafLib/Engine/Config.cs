@@ -156,7 +156,7 @@ public class Config : NotifyPropertyChanged
     public Dictionary<string, ObservableDictionary<string, string>>
                             Plugins     { get; set; } = [];
     private
-           Dictionary<string, ObservableDictionary<string, string>>
+readonly Dictionary<string, ObservableDictionary<string, string>>
                             defaultPlugins;
 
     public class PlayerConfig : NotifyPropertyChanged
@@ -537,6 +537,17 @@ public class Config : NotifyPropertyChanged
         /// </summary>
         public int              MaxVideoFramesPrev  { get => _MaxVideoFramesPrev;   set { if (Set(ref _MaxVideoFramesPrev, value)) { player?.RefreshMaxVideoFrames(); } } }
         int _MaxVideoFramesPrev = 0;
+
+        /// <summary>
+        /// Q-0427 (BlotEyes): Radius of the sliding frame cache used for frame-by-frame stepping.
+        /// Keeps up to N decoded frames BEFORE the current frame, so stepping backwards hits the
+        /// cache instead of seeking + decoding again (~300ms per step at GOP=15 4K).
+        /// The forward direction needs no cache (the decoder thread already decodes ahead).
+        /// 0 disables the cache. NOTE: cached frames keep holding HW decoder surfaces, therefore
+        /// the surface pool (extra_hw_frames) is enlarged by this amount when the decoder opens;
+        /// VRAM cost is roughly N x single-frame size (4K is ~12.4MB per frame).
+        /// </summary>
+        public int              FrameCacheWindow    { get; set; } = 20;
 
         /// <summary>
         /// Maximum audio frames to be decoded and processed for playback

@@ -23,7 +23,7 @@ namespace FlyleafLib.MediaFramework.MediaRenderer;
 class ChildRenderer : IVP
 {
     public VPConfig             Config          => ucfg;
-    VPConfig ucfg;
+    readonly VPConfig ucfg;
     public Renderer             Renderer        { get; private set; }
     public SwapChain            SwapChain       { get; private set; }
     public Viewport             Viewport        { get; private set; }
@@ -31,13 +31,13 @@ class ChildRenderer : IVP
     public int                  ControlHeight   { get; private set; }
     public int                  SideXPixels     => sideXPixels;
     public int                  SideYPixels     => sideYPixels;
-    int                         sideXPixels, sideYPixels;
+    readonly int                         sideXPixels, sideYPixels;
 
-    ID3D11DeviceContext     context;
-    ID3D11Buffer            vsBuffer;
+    readonly ID3D11DeviceContext     context;
+    readonly ID3D11Buffer            vsBuffer;
     VSBufferType            vsData    = new();
-
-    VPRequestType   vpRequestsIn, vpRequests; // In: From User | ProcessRequests Copy
+    private VPRequestType vpRequestsIn;
+    private readonly VPRequestType vpRequests;
 
     public ChildRenderer(VPConfig config)
     {

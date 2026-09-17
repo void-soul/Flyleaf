@@ -491,7 +491,7 @@ public unsafe partial class AudioDecoder : DecoderBase
         }
     }
 
-    Queue<byte[]> cBufHistory = [];
+    readonly Queue<byte[]> cBufHistory = [];
     private void AllocateCircularBuffer(int samples)
     {
         /* TBR

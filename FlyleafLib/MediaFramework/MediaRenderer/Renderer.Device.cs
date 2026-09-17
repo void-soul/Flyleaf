@@ -28,7 +28,7 @@ public unsafe partial class Renderer : NotifyPropertyChanged
     internal VideoConfig ucfg;
 
     public FeatureLevel         FeatureLevel    { get; private set; }
-    static FeatureLevel[]   featureLevels =
+    static readonly FeatureLevel[]   featureLevels =
     [
         FeatureLevel.Level_11_1,
         FeatureLevel.Level_11_0,
@@ -50,7 +50,7 @@ public unsafe partial class Renderer : NotifyPropertyChanged
     bool                    forceWarp;
 
     internal LogHandler     Log;
-    Player                  player;
+    readonly Player                  player;
     ID2D1Device             device2d;
     internal ID2D1DeviceContext
                             context2d;

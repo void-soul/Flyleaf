@@ -35,7 +35,7 @@ public unsafe partial class Renderer
 
     bool            vflip;
 
-    static InputElementDescription[] inputElements =
+    static readonly InputElementDescription[] inputElements =
     {
         new("POSITION", 0, Format.R32G32B32_Float,  0),
         new("TEXCOORD", 0, Format.R32G32_Float,     0),
@@ -44,7 +44,7 @@ public unsafe partial class Renderer
     {
         BindFlags = BindFlags.VertexBuffer
     };
-    static float[] vertexBufferData =
+    static readonly float[] vertexBufferData =
     [
         -1.0f,  -1.0f,  0,      0.0f, 1.0f,
         -1.0f,   1.0f,  0,      0.0f, 0.0f,
@@ -401,7 +401,7 @@ public unsafe partial class Renderer
     {
         public Vector4 PanoParams;  // rotationX, rotationY, zoom, fov
         public float AspectRatio;
-        float _pad1, _pad2, _pad3;  // 16-byte alignment
+        readonly float _pad1, _pad2, _pad3;  // 16-byte alignment
     }
 
     void FLSetPano360()

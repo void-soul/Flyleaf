@@ -74,12 +74,12 @@ public class Playlist : NotifyPropertyChanged
 
     public ObservableCollection<PlaylistItem>
                         Items           { get; set; } = [];
-    object lockItems = new();
+    readonly object lockItems = new();
 
     long openCounter;
     //long openItemCounter;
     internal DecoderContext decoder;
-    LogHandler Log;
+    readonly LogHandler Log;
 
     public Playlist(int uniqueId)
     {

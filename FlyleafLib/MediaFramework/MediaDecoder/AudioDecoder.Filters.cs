@@ -17,13 +17,13 @@ public unsafe partial class AudioDecoder
     double                  missedSamples;
     long                    filterFirstPts;
     bool                    setFirstPts;
-    object                  lockSpeed = new();
+    readonly object                  lockSpeed = new();
     AVRational              sinkTimebase;
     AVFrame*                filtframe;
 
-    static AVFilter* ATEMPO     = avfilter_get_by_name("atempo");
-    static AVFilter* ABUFFER    = avfilter_get_by_name("abuffer");
-    static AVFilter* ABUFFERSINK= avfilter_get_by_name("abuffersink");
+    static readonly AVFilter* ATEMPO     = avfilter_get_by_name("atempo");
+    static readonly AVFilter* ABUFFER    = avfilter_get_by_name("abuffer");
+    static readonly AVFilter* ABUFFERSINK= avfilter_get_by_name("abuffersink");
 
     private AVFilterContext* CreateFilter(string name, string args, AVFilterContext* prevCtx = null, string id = null)
         => CreateFilter(avfilter_get_by_name(name), args, prevCtx, id ?? name);

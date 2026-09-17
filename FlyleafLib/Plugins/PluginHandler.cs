@@ -57,7 +57,7 @@ public class PluginHandler
     #endregion
 
     #region Initialize
-    LogHandler Log;
+    readonly LogHandler Log;
     public PluginHandler(Config config, int uniqueId = -1)
     {
         Config      = config;

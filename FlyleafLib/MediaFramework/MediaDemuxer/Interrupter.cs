@@ -9,8 +9,8 @@ public unsafe class Interrupter
     public int          Interrupted     { get; private set; }
     public bool         Timedout        { get; private set; }
 
-    Demuxer demuxer;
-    Stopwatch sw = new();
+    readonly Demuxer demuxer;
+    readonly Stopwatch sw = new();
     internal AVIOInterruptCB_callback interruptClbk;
     long curTimeoutMs;
 

@@ -11,7 +11,7 @@ namespace FlyleafLib.MediaFramework.MediaRenderer;
 
 public unsafe partial class Renderer
 {
-    static string[] pixelOffsets = ["r", "g", "b", "a"];
+    static readonly string[] pixelOffsets = ["r", "g", "b", "a"];
 
     // TODO: PSCase flags / enum?*
     const string dYUVLimited    = "dYUVLimited";
@@ -29,9 +29,9 @@ color = float4(
     Texture2.Sample(Sampler, input.Texture).rg,
     1.0f);
 ";
-    Texture2DDescription[]          txtDesc     = new Texture2DDescription[4];              // SW Textures (TODO: Array)
-    ShaderResourceViewDescription[] srvDesc     = new ShaderResourceViewDescription[4];     // SW / HW SRV Desc
-    SubresourceData[]               subData     = new SubresourceData[1];                   // SW -> HW DataPointer / RowPitch
+    readonly Texture2DDescription[]          txtDesc     = new Texture2DDescription[4];              // SW Textures (TODO: Array)
+    readonly ShaderResourceViewDescription[] srvDesc     = new ShaderResourceViewDescription[4];     // SW / HW SRV Desc
+    readonly SubresourceData[]               subData     = new SubresourceData[1];                   // SW -> HW DataPointer / RowPitch
 
     PSCase  psCase;
     string  psId, psIdPrev;
