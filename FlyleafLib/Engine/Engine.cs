@@ -51,7 +51,7 @@ public static class Engine
                     Log;
 
     static Thread   tMaster;
-    static object   lockEngine = new();
+    static readonly object   lockEngine = new();
     static bool     isLoading;
     static int      timePeriod;
     static int      threadExecutionState; // ES_CONTINUOUS
@@ -185,7 +185,20 @@ public static class Engine
                 Players[0].Dispose();
         };
 
-        SetOutput();
+        // Q-0466：SetOutput() 可能因日志文件被其它进程占用（Recorder 与 Player 共用同一输出
+        // 目录）或权限问题而抛异常。它跑在 StartInternalNonUI 之前，那里才做 Plugins = new()
+        // 与 IsLoaded = true —— 一旦这里抛出，Engine.Plugins 永远为 null、IsLoaded 永远 false，
+        // 后续 new Config() 在 Config.cs:28（Engine.Plugins.Types.Values）直接空引用崩溃。
+        // 日志目标不可用只该丢失日志，绝不能让 Engine 初始化失败 —— 故在此兜住。
+        try
+        {
+            SetOutput();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"[FlyleafEngine] Log output unavailable ({e.GetType().Name}: {e.Message}); continuing without file logging");
+        }
+
         Log     = new("[FlyleafEngine] ");
         Audio   = new();
         Video   = new();
