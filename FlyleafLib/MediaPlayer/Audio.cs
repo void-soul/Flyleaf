@@ -115,10 +115,12 @@ public class Audio : NotifyPropertyChanged
         {
             lock (locker)
             {
-                if (sourceVoice == null)
-                    return;
-
-                sourceVoice.Volume = value ? 0 : _Volume / 100.0f;
+                // BLOT mod #13 (Q-0471)：原实现在 sourceVoice == null（音频尚未初始化）时**直接 return**，
+                // 连内部 mute 字段都不写。媒体打开是异步的，宿主通常在音频就绪**之前**就设置静音
+                // （多路回看只让当前关注的一路出声），于是这些设置被静默丢弃 → 多路同时出声。
+                // 改为总是记录状态：真正生效由 Initialize() 的 `sourceVoice.Volume = mute ? 0 : ...` 应用。
+                if (sourceVoice != null)
+                    sourceVoice.Volume = value ? 0 : Math.Max(0, _Volume / 100.0f);
             }
 
             Set(ref mute, value, false);
@@ -148,11 +150,11 @@ public class Audio : NotifyPropertyChanged
     #region Declaration
     public Player Player => player;
 
-    Player                  player;
+    readonly Player                  player;
     Config                  Config => player.Config;
     DecoderContext          decoder => player?.decoder;
 
-    Action                  uiAction;
+    readonly Action                  uiAction;
     internal readonly object
                             locker = new();
 
@@ -161,8 +163,8 @@ public class Audio : NotifyPropertyChanged
                             masteringVoice;
     internal IXAudio2SourceVoice
                             sourceVoice;
-    WaveFormat              waveFormat  = new(48000, 16, 2); // Output Audio Device
-    AudioBuffer             audioBuffer = new();
+    readonly WaveFormat              waveFormat  = new(48000, 16, 2); // Output Audio Device
+    readonly AudioBuffer             audioBuffer = new();
     internal double         Timebase;
     internal ulong          submittedSamples;
     int                     curSampleRate = -1;
