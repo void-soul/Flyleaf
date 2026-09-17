@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using System.Windows;
 
 using SharpGen.Runtime;
@@ -21,6 +21,10 @@ public unsafe class SwapChain
     public GPUOutput                Monitor         { get; private set; }
     public nint                     ControlHwnd     { get; private set; }
     public bool                     CanPresent      { get; internal set; } // Don't render / present during minimize (or invalid size)
+    /// <summary> BLOT (Q-0411): true while this swap chain is detached from its HWND because
+    /// another player took over the host (see <see cref="DetachFromHwnd"/>/<see cref="ReattachToHwnd"/>).
+    /// GPU resources stay alive in this state.</summary>
+    public bool                     IsDetached      => dcompDetached;
 
     public ID3D11VideoProcessorOutputView
                                     VPOV            { get; internal set; }
@@ -47,10 +51,11 @@ public unsafe class SwapChain
     Action<IDXGISwapChain2>
                         WinUIClbk;
     bool                isCornerRadiusEmpty = true;
-    IVP                 vp;
-    LogHandler          Log;
-    VPConfig            ucfg;
-    object              lockDispose = new();
+    readonly IVP                 vp;
+    readonly LogHandler          Log;
+    readonly VPConfig            ucfg;
+    readonly object              lockDispose = new();
+    bool                dcompDetached; // BLOT (Q-0411): DComp detached from the HWND while GPU resources stay alive
 
     internal SwapChain(Renderer renderer, IVP vp = null)
     {
@@ -121,22 +126,8 @@ public unsafe class SwapChain
             controlHeight   = rect.Bottom - rect.Top;
 
             sc = Engine.Video.Factory.CreateSwapChainForComposition(Renderer.Device, Desc()); // we will resize on rendering
-            DComp.DCompositionCreateDevice(Renderer.DXGIDevice, out dcDevice).CheckError();
-            dcDevice.CreateTargetForHwnd(ControlHwnd, false, out dcTarget).CheckError();
-            dcDevice.CreateVisual(out dcVisual).CheckError();
-            dcVisual.SetContent(sc).CheckError();
-            dcTarget.SetRoot(dcVisual).CheckError();
-            dcDevice.CreateRectangleClip(out dcClip).CheckError();
+            SetupDComp();
 
-            if (!isCornerRadiusEmpty)
-            {
-                SetClipHelper();
-                dcVisual.SetClip(dcClip).CheckError();
-            }
-
-            dcDevice.Commit().CheckError();
-
-            Engine.Video.Factory.MakeWindowAssociation(ControlHwnd, WindowAssociationFlags.IgnoreAll);
             AddSubClass();
 
             SetupLocalHelper();
@@ -221,6 +212,119 @@ public unsafe class SwapChain
             WinUIClbk = null;
         }
     }
+
+    /// <summary>
+    /// BLOT MODIFICATION (Q-0411): detaches the swap chain from its HWND while keeping
+    /// every GPU resource (swap chain / back buffers / VPOV / bitmap) alive.
+    /// Used by FlyleafHost when switching the displayed player: the player that gets
+    /// hidden keeps DECODING and PLAYING (CanPresent=false has the same meaning as a
+    /// minimized window — the render loop skips presenting but playback continues) and
+    /// can be re-attached in milliseconds by <see cref="ReattachToHwnd"/>.
+    /// Unlike <see cref="Dispose(bool)"/> this neither clears the screen nor tears down
+    /// GPU resources, so switching back shows the picture instantly instead of going
+    /// through a full swap-chain rebuild (the "black screen" on preview/file switching).
+    /// </summary>
+    public void DetachFromHwnd()
+    {
+        lock (Renderer.lockDevice)
+        {
+            if (Disposed || dcompDetached)
+                return;
+
+            // Q-0319 ordering: flip CanPresent before anything else so render loops stop
+            // touching the swap chain while we tear the DComp chain down.
+            //
+            // NOTE: the render loop must stop here. Keeping it running would let every
+            // hidden player render at full rate (5-9 slots => doubled GPU load, visibly
+            // choppy), and Renderer.Snapshot on the UI thread would stall the UI.
+            CanPresent = false;
+
+
+            lock (lockDispose)
+            {
+                lock (Renderer.lockRenderLoops)
+                {
+                    DisposeDCompLocked();
+                }
+            }
+
+            if (CanInfo) Log.Info($"SC Detached [Hwnd: {ControlHwnd}] (resources kept)");
+
+            RemoveSubClass();
+            ControlHwnd = 0;
+            dcompDetached = true;
+        }
+    }
+
+    /// <summary>
+    /// BLOT MODIFICATION (Q-0411): re-attaches a swap chain previously detached with
+    /// <see cref="DetachFromHwnd"/>. The fast path only rebuilds the DirectComposition
+    /// chain (pure COM calls — no GPU reallocation, no ClearScreen). Falls back to the
+    /// regular full <see cref="Setup(nint)"/> when the swap chain is not in the
+    /// detached state (e.g. first-time attach).
+    /// </summary>
+    public void ReattachToHwnd(nint hwnd)
+    {
+        lock (Renderer.lockDevice)
+        {
+            // Fast path: previously detached, swap chain + GPU resources still alive.
+            if (!Disposed && dcompDetached && sc != null && !Renderer.Disposed)
+            {
+
+                dcompDetached = false;
+                ControlHwnd = hwnd;
+
+                if (hwnd == 0)
+                    return;
+
+                try
+                {
+                    // 1) 读当前窗口尺寸（切回看伴随放大，隐藏期间窗口已变化）
+                    RECT rect = new();
+                    GetWindowRect(ControlHwnd, ref rect);
+                    controlWidth = Math.Max(1, rect.Right - rect.Left);
+                    controlHeight = Math.Max(1, rect.Bottom - rect.Top);
+                    UpdateDisplay(true); // the window may have moved to another monitor meanwhile
+
+                    // 2) BLOT (Q-0411): 先重建 swapchain buffer 到新尺寸 + 渲染当前帧 + Present，
+                    //    前缓冲就位后【再】挂 DComp —— 挂上瞬间显示的尺寸/位置就是正确的。
+                    //    原顺序（先挂后渲）下，挂上时前缓冲还是旧尺寸内容（DComp 不缩放，
+                    //    画面按原始像素显示在窗口左上角一块），ResizeBuffers + 新帧 Present
+                    //    之后才突然填满 —— 即用户看到的「播放器没有随 slot 变大，
+                    //    而是 slot 大了之后瞬间变大」的几何跳变。
+                    //    Present 到尚未挂接的 swapchain 是合法操作（内容进前缓冲，等 DComp 消费）。
+                    CanPresent = true;
+                    vp.VPRequest(VPRequestType.Resize);
+                    Renderer.RenderCurrentFrameNow();
+
+                    // 3) 挂 DComp（此刻前缓冲已是新尺寸的新内容）
+                    lock (Renderer.lockRenderLoops)
+                    {
+                        SetupDComp();
+                    }
+
+
+                    AddSubClass();
+
+                    if (CanInfo) Log.Info($"SC Re-attached [Hwnd: {ControlHwnd}]");
+                }
+                catch (Exception e)
+                {
+                    Log.Error($"SC Re-attach failed [Hwnd: {hwnd}] ({e.Message})");
+                    // Fall back to a full rebuild.
+                    DisposeLocal();
+                    ControlHwnd = hwnd;
+                    if (hwnd != 0)
+                        SetupLocal();
+                }
+                return;
+            }
+
+            // Not in the detached state -> regular full setup.
+            dcompDetached = false;
+            Setup(hwnd);
+        }
+    }
     internal void DisposeLocal(bool rendererFrame = true)
     {
         lock (lockDispose)
@@ -235,6 +339,7 @@ public unsafe class SwapChain
 
             Renderer.ClearScreen(force: true, rendererFrame: rendererFrame);
             Disposed = true;
+            dcompDetached = false;
 
             if (WinUIClbk != null)
             {
@@ -254,25 +359,7 @@ public unsafe class SwapChain
             // (crash on rapid player switching, e.g. quick group zoom / file playback).
             lock (Renderer.lockRenderLoops)
             {
-                if (dcClip != null)
-                {
-                    dcClip.Dispose();
-                    dcClip = null;
-                }
-
-                if (dcTarget != null)
-                {
-                    dcTarget.SetRoot(null);
-                    dcTarget.Dispose();
-                    dcTarget = null;
-                }
-
-                if (dcVisual != null)
-                {
-                    dcVisual.SetContent(null);
-                    dcVisual.Dispose();
-                    dcVisual = null;
-                }
+                DisposeDCompLocked();
 
                 DisposeHelper();
 
@@ -280,12 +367,6 @@ public unsafe class SwapChain
                 {
                     sc.Dispose();
                     sc = null;
-                }
-
-                if (dcDevice != null)
-                {
-                    dcDevice.Dispose();
-                    dcDevice = null;
                 }
             }
 
@@ -335,6 +416,65 @@ public unsafe class SwapChain
             bb.Dispose();
             bb = null;
         }
+    }
+
+    /// <summary>
+    /// Releases ONLY the DirectComposition chain that binds the swap chain to the HWND
+    /// (target/visual/clip/device). The swap chain itself and all GPU resources
+    /// (sc/bb/bbRtv/VPOV/bitmap2d) are kept alive.
+    /// Caller must hold <see cref="Renderer.lockRenderLoops"/>.
+    /// </summary>
+    void DisposeDCompLocked()
+    {
+        if (dcClip != null)
+        {
+            dcClip.Dispose();
+            dcClip = null;
+        }
+
+        if (dcTarget != null)
+        {
+            dcTarget.SetRoot(null);
+            dcTarget.Dispose();
+            dcTarget = null;
+        }
+
+        if (dcVisual != null)
+        {
+            dcVisual.SetContent(null);
+            dcVisual.Dispose();
+            dcVisual = null;
+        }
+
+        if (dcDevice != null)
+        {
+            dcDevice.Dispose();
+            dcDevice = null;
+        }
+    }
+
+    /// <summary>
+    /// (Re)builds the DirectComposition chain that presents <see cref="sc"/> onto
+    /// <see cref="ControlHwnd"/>. Requires <see cref="sc"/> to be alive.
+    /// </summary>
+    void SetupDComp()
+    {
+        DComp.DCompositionCreateDevice(Renderer.DXGIDevice, out dcDevice).CheckError();
+        dcDevice.CreateTargetForHwnd(ControlHwnd, false, out dcTarget).CheckError();
+        dcDevice.CreateVisual(out dcVisual).CheckError();
+        dcVisual.SetContent(sc).CheckError();
+        dcTarget.SetRoot(dcVisual).CheckError();
+        dcDevice.CreateRectangleClip(out dcClip).CheckError();
+
+        if (!isCornerRadiusEmpty)
+        {
+            SetClipHelper();
+            dcVisual.SetClip(dcClip).CheckError();
+        }
+
+        dcDevice.Commit().CheckError();
+
+        Engine.Video.Factory.MakeWindowAssociation(ControlHwnd, WindowAssociationFlags.IgnoreAll);
     }
 
     public void Resize(int width, int height)
@@ -482,8 +622,8 @@ public unsafe class SwapChain
     #endregion
 
     #region WndProc
-    SubclassWndProc wndProcDelegate;
-    IntPtr          wndProcDelegatePtr;
+    readonly SubclassWndProc wndProcDelegate;
+    readonly IntPtr          wndProcDelegatePtr;
     bool            hasSubClass;
 
     void AddSubClass()
@@ -537,3 +677,4 @@ public unsafe class SwapChain
     }
     #endregion
 }
+

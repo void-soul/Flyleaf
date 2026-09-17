@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -115,7 +115,7 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
 
     static bool         isDesignMode;
     static int          idGenerator = 1;
-    static WindowStyles NONE_STYLE      = WindowStyles.WS_MINIMIZEBOX | WindowStyles.WS_CLIPSIBLINGS | WindowStyles.WS_CLIPCHILDREN | WindowStyles.WS_VISIBLE; // WS_MINIMIZEBOX required for swapchain
+    static readonly WindowStyles NONE_STYLE      = WindowStyles.WS_MINIMIZEBOX | WindowStyles.WS_CLIPSIBLINGS | WindowStyles.WS_CLIPCHILDREN | WindowStyles.WS_VISIBLE; // WS_MINIMIZEBOX required for swapchain
     
     double              curResizeRatio;
     bool                surfaceClosed, surfaceClosing, overlayClosed;
@@ -127,7 +127,7 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
     DateTimeOffset      pano360PrevTime;
     bool                isMouseBindingsSubscribedSurface;
     bool                isMouseBindingsSubscribedOverlay;
-    Window              standAloneOverlay;
+    readonly Window              standAloneOverlay;
 
     ResizeSide          resizingSide;
     double              ratioBeforeFullScreen;
@@ -1619,7 +1619,13 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
         {
             Log.Debug($"De-assign Player #{oldPlayer.PlayerId}");
 
-            oldPlayer.Renderer?.SwapChain.Dispose(rendererFrame: false);
+            // BLOT MODIFICATION (Q-0411): detach instead of dispose — keep the hidden
+            // player's GPU resources alive so it keeps playing (render loop skips
+            // presenting, same as a minimized window) and re-attaches instantly when
+            // switched back. Dispose was the source of the "black screen" flash on
+            // preview <-> file playback switching and of spurious PlaybackStopped
+            // events (present-race on torn-down buffers, see Q-0319).
+            oldPlayer.Renderer?.SwapChain.DetachFromHwnd();
             oldPlayer.Host = null;
         }
 
@@ -1646,7 +1652,9 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
         }
         
         if (Surface != null)
-            Player.Renderer.SwapChain.Setup(SurfaceHandle);
+        {
+            Player.Renderer.SwapChain.ReattachToHwnd(SurfaceHandle);
+        }
     }
     public virtual void SetSurface(bool fromSetOverlay = false)
     {
@@ -2628,3 +2636,4 @@ struct DragOwnerMLD
     public double Left;
     public double Top;
 }
+
