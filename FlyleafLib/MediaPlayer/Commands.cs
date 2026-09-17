@@ -80,7 +80,7 @@ public class Commands
 
     public ICommand ResetFilters            { get; set; }
 
-    Player player;
+    readonly Player player;
 
     public Commands(Player player)
     {
@@ -108,7 +108,8 @@ public class Commands
         SeekToChapter           = new RelayCommand(SeekToChapterAction);
 
         ShowFrameNext           = new RelayCommandSimple(player.ShowFrameNext);
-        ShowFramePrev           = new RelayCommandSimple(player.ShowFramePrev);
+        // Q-0427：ShowFramePrev 加了 step 可选参数，方法组不再匹配无参委托，改 lambda
+        ShowFramePrev           = new RelayCommandSimple(() => player.ShowFramePrev());
 
         NormalScreen            = new RelayCommandSimple(player.NormalScreen);
         FullScreen              = new RelayCommandSimple(player.FullScreen);

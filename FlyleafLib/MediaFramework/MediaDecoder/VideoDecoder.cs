@@ -42,14 +42,71 @@ public unsafe class VideoDecoder : DecoderBase
     int                     curFrameWidth, curFrameHeight; // To catch 'codec changed'
 
     // Hot paths / Same instance
-    VideoCache              Frames;
+    readonly VideoCache              Frames;
     PacketQueue             vPackets;
+
+    // Q-0427 滑动窗口缓存：帧号 → 解码后的帧。只缓存当前帧【之前】的帧（供逐帧后退取用）；
+    // 前进方向不必缓存——解码线程本就在流式预解（Frames 队列）。
+    // 缓存的帧会持续持有 HW decoder surface，故 Open 时按窗口大小扩容 extra_hw_frames，
+    // 否则缓存会抽干 surface 池、解码线程取不到 surface 而卡死。
+    // Q-0431：缓存 key 用【VideoFrame.Timestamp（Player 时间轴）】而不是帧号 ——
+    // 帧号有两个口径：GetFrameNumber(CurTime) 含 +demuxer.StartTime、GetFrameNumber2(pts) 不含，
+    // 而 demuxer.StartTime 会在 seek 后变化，导致两侧系统性错位（实测偏 229 帧 → 缓存 100% 落空）。
+    // Timestamp 与 Player.CurTime 同基准（FillPlanes 里已减掉 Demuxer.StartTime），两侧天然一致。
+    internal readonly Dictionary<long, VideoFrame> StepCache = [];
+    int                     stepCacheK;
+
+    // Q-0463：HW surface 池的空闲余量（见 Open2 中 extra_hw_frames 的注释）。
+    public const int        SurfaceMarginFrames     = 8;
+
+    // Q-0486：ENOMEM（surface 池耗尽）计数。
+    // 该错误原本只写进 Flyleaf 自己的日志（宿主日志里完全看不到），现场表现为
+    // "画面定格 / 逐帧每步数百毫秒"却无从归因。此处累计计数并暴露给宿主
+    // （PlayerGridControl）打显式告警行。解码线程写、UI 线程读 → 用 Interlocked / Volatile。
+    int                     enomemCount;
+    int                     enomemConsumed;
+    long                    lastEnomemTick;
+
+    /// <summary> 自打开以来累计的 ENOMEM 次数（跨线程安全）。 </summary>
+    public int EnomemCount => System.Threading.Volatile.Read(ref enomemCount);
+
+    /// <summary> 最近一次 ENOMEM 的 Environment.TickCount64（0 = 从未发生）。 </summary>
+    public long LastEnomemTick => System.Threading.Volatile.Read(ref lastEnomemTick);
+
+    /// <summary> 生效的逐帧缓存窗口 K（Open 时快照），供宿主告警时提示。 </summary>
+    public int StepCacheWindow => stepCacheK;
+
+    /// <summary>
+    /// 取出「自上次调用以来新增的 ENOMEM 次数」并清零。
+    /// 宿主据此决定是否打告警行（配合时间节流），避免逐帧连发时每步都刷日志。
+    /// </summary>
+    public int ConsumeNewEnomemCount()
+    {
+        var total = System.Threading.Volatile.Read(ref enomemCount);
+        var prev = System.Threading.Interlocked.Exchange(ref enomemConsumed, total);
+        return total - prev;
+    }
+
+    /// <summary> 记录一次 ENOMEM（解码线程调用）。 </summary>
+    void NoteEnomem()
+    {
+        System.Threading.Interlocked.Increment(ref enomemCount);
+        System.Threading.Volatile.Write(ref lastEnomemTick, Environment.TickCount64);
+    }
+
+    // Q-0427b：all-intra（GOP=1）自动检出 —— 统计每次填充的"路径长度"（seek 后除目标帧外
+    // 还能顺带缓存几帧）。GOP=1 时每帧都是关键帧，路径长度恒 ≤1，缓存零收益却白占 HW surface
+    // （4K 下 K=20 ≈ +250MB），在 4K120/72GB 这类大流上会压垮解码导致画面不动。
+    // 采样若干次后若平均 ≤1 则自动关闭缓存并释放已缓存帧。
+    int                     stepCachePathSamples;
+    int                     stepCachePathTotal;
+    const int               StepCachePathSampleCount = 8;   // 采样 8 次后判定（避免单帧抖动误判）
 
     // Reverse Playback
     ConcurrentStack<List<nint>>
                             curReverseVideoStack    = [];
     List<nint>              curReverseVideoPackets  = [];
-    List<VideoFrame>        curReverseVideoFrames   = [];
+    readonly List<VideoFrame>        curReverseVideoFrames   = [];
     int                     curReversePacketPos     = 0;
 
     // Drop frames if FPS is higher than allowed
@@ -59,6 +116,43 @@ public unsafe class VideoDecoder : DecoderBase
     // Fixes Seek Backwards failure on broken formats
     long                    curFixSeekDelta         = 0;
     const long              FIX_SEEK_DELTA_MCS      = 2_100_000;
+
+    // Q-0431：FIX_SEEK_DELTA_MCS 是【一次 2.1 秒】的粗粒度回退（为 seek backward 失败的格式设计），
+    // 而 curFixSeekDelta 原实现只增不减 —— 只要触发过一次，此后每一次 seek 都被永久提前 2.1 秒：
+    // 解码路径从 ≤1 个 GOP 膨胀到数百帧（实测 252 帧），既慢又让滑动窗口缓存收不到有用的尾部帧。
+    // MaxLeadFrames = seek 落点允许比目标早的最大帧数（正常回退最多 1 个 GOP，留余量取 20）；
+    // 超出的部分按比例回收 curFixSeekDelta，使其能自愈。
+    const int               MaxLeadFrames           = 20;
+
+    // Q-0461：精确 seek（"回退到目标前一个 IDR + 解码前进 + 丢弃早于目标的帧"）。
+    // 背景：mpegts + HEVC 的 av_seek_frame(BACKWARD) 落点在【目标所在 GOP 的内部】
+    // （实测标准文件 -ss 落在该 GOP 的 IDR+11 帧处），目标之前那个 IDR 已被越过；
+    // 而解码器现有的 keyPacketRequired 是"丢弃非关键包直到【下一个】IDR"，那个 IDR
+    // 必定晚于目标 —— 于是每次 seek 都过冲最多 1 个 GOP，且多机位因 GOP 相位不同
+    // （实测两份样本开头孤儿帧分别为 96 / 112）而互相错开最多 1 个 GOP。
+    // 解法：seek 时多回退一个 GOP，保证落点之后的第一个 IDR <= 目标；再丢弃时间戳
+    // 早于目标的帧，使所有机位精确落在同一时刻 T（与 GOP 相位无关）。
+    long                    accurateSeekTargetTs    = AV_NOPTS_VALUE; // 相对 demuxer.StartTime 的 ticks(100ns)
+    int                     accurateSeekDropped;
+    int                     maxAccurateSeekDrops    = 60;   // 由 SetAccurateSeekTarget 按时间预算换算
+
+    // Q-0461：本类【不】自己测 GOP —— 用 Demuxer.MeasuredGopTicks（Q-0458 已实现，
+    // 且在 Demuxer.Seek 里把 lastKeyPacketPts 置 NoTs 以避免跨越跳转算出假 GOP）。
+    // 这里曾有一份重复实现（取相邻关键帧 pts 间隔的最大值），但没在 seek 时重置采样点：
+    // 从 2.0s 播放位置跳到末尾后，下一个关键帧在 86.0s → 差值 84s 被当成 GOP，
+    // 于是每次回退 seek 都减 84 秒、被 clamp 到文件开头，落点归零。
+    internal void SetAccurateSeekTarget(long targetTs, long maxLeadTicks)
+    {
+        accurateSeekTargetTs    = targetTs;
+        accurateSeekDropped     = 0;
+
+        // 丢弃预算必须是【时间】而非帧数：正常只需 <= 1 个 GOP；给 4 倍余量并保底 2 秒。
+        // 之前写死 400 帧，在 120fps 是 3.3s、在 30fps 却是 13.3s —— 帧率一变就失控。
+        long frameTicks = VideoStream != null ? VideoStream.FrameDuration : 0;
+        maxAccurateSeekDrops = frameTicks > 0
+            ? (int)Math.Clamp(maxLeadTicks / frameTicks, 1, 2000)
+            : 60;
+    }
 
     public VideoDecoder(Config config, int uniqueId = -1, bool createRenderer = true, Player player = null) : base(config, uniqueId)
     {
@@ -73,7 +167,7 @@ public unsafe class VideoDecoder : DecoderBase
 
     #region Video Acceleration (Should be disposed seperately)
     public CodecSpec CurCodecSpec;
-    AVCodecContext_get_format getHWformat;
+    readonly AVCodecContext_get_format getHWformat;
 
     internal const AVPixelFormat    HW_PIX_FMT  = AVPixelFormat.D3d11;
     internal const AVHWDeviceType   HW_DEVICE   = AVHWDeviceType.D3d11va;
@@ -87,9 +181,9 @@ public unsafe class VideoDecoder : DecoderBase
 
         internal static CodecSpec Empty = new();
     }
-    static ConcurrentDictionary<AVCodecID,  CodecSpec> hwSpecs  = [];
-    static ConcurrentDictionary<AVCodecID,  CodecSpec> swSpecs  = [];
-    static ConcurrentDictionary<string,     CodecSpec> specs    = [];
+    static readonly ConcurrentDictionary<AVCodecID,  CodecSpec> hwSpecs  = [];
+    static readonly ConcurrentDictionary<AVCodecID,  CodecSpec> swSpecs  = [];
+    static readonly ConcurrentDictionary<string,     CodecSpec> specs    = [];
     static CodecSpec FindHWDecoder(AVCodecID id)
     {
         if (hwSpecs.TryGetValue(id, out CodecSpec spec))
@@ -284,7 +378,16 @@ public unsafe class VideoDecoder : DecoderBase
                 codecCtx->hwaccel_flags|= HWAccelFlags.AllowProfileMismatch;
             codecCtx->get_format        = getHWformat;
             codecCtx->hw_device_ctx     = av_buffer_ref(Renderer.ffDevice);
-            codecCtx->extra_hw_frames   = Config.Decoder.MaxVideoFrames + 1; // 1 extra for Renderer's LastFrame
+            // Q-0427：+1 for Renderer's LastFrame；再 +FrameCacheWindow，因为滑动窗口缓存的帧
+            // 会长期持有 surface（不缓存则会抽干池 → 解码线程卡死）。代价是显存按窗口线性增长。
+            // Q-0463：池还要【留余量】。池容量 = MaxVideoFrames + 1 + K 时，同时持有者恰好是
+            // VideoCache(MaxVideoFrames) + Renderer(1) + StepCache(K) —— 三者打满即 100% 占用，
+            // 解码器自己（DPB / 参考帧 / 在途帧）拿到 0 个空闲 surface → avcodec 返回
+            // ENOMEM(-12)（实测 4K120 / K=119 时 12462 次，紧接着 Too many errors 停摆）。
+            // 故额外给出 SurfaceMarginFrames 个空闲 surface。
+            codecCtx->extra_hw_frames   = Config.Decoder.MaxVideoFrames + 1
+                                        + Math.Max(0, Config.Decoder.FrameCacheWindow)
+                                        + SurfaceMarginFrames;
         }
         else
             codecCtx->thread_count      = Math.Min(Config.Decoder.VideoThreads, codecCtx->codec_id == AVCodecID.Hevc ? 32 : 16);
@@ -310,6 +413,9 @@ public unsafe class VideoDecoder : DecoderBase
             isIntraOnly = codecCtx->codec_descriptor->props.HasFlag(CodecPropFlags.IntraOnly);
 
         vPackets            = demuxer.VideoPackets;
+        // Q-0427：窗口半径在 Open 时快照——它决定了 extra_hw_frames（surface 池），
+        // 运行中改配置不会重建解码器，故这里取一次即可。
+        stepCacheK          = Math.Max(0, Config.Decoder.FrameCacheWindow);
         keyFrameRequired    = keyPacketRequired = false; // allow no key packet after open (lot of videos missing this)
         filledFromCodec     = false;
         isDraining          = false;
@@ -327,7 +433,39 @@ public unsafe class VideoDecoder : DecoderBase
         return true;
     }
 
-    internal void Flush()
+    /// <summary>
+    /// Q-0537：滑动窗口缓存的访问锁。后台预填充（另一线程）合并新帧 与 UI 线程查询/消费缓存
+    /// 必须互斥 —— Dictionary 并发读写会损坏结构。锁内只有字典操作（µs 级），不构成阻塞点。
+    /// </summary>
+    readonly object stepCacheLock = new();
+
+    /// <summary>
+    /// Q-0537：把一批帧合并进滑动窗口（后台预填充完成后调用）。按 <see cref="CacheStepFrame"/> 规则：
+    /// 同键替换、超限淘汰时间戳最小的一帧；窗口已关闭则直接释放，避免泄漏。
+    /// </summary>
+    public void MergeStepCacheFrames(IEnumerable<VideoFrame> frames)
+    {
+        if (frames == null) return;
+
+        lock (stepCacheLock)
+        {
+            foreach (var f in frames)
+            {
+                if (f == null) continue;
+                if (stepCacheK <= 0) { f.Dispose(); continue; }
+                CacheStepFrame(StepCache, f.Timestamp, f);
+            }
+        }
+    }
+
+    internal void Flush() => Flush(true);
+
+    /// <param name="disposeStepCache">
+    /// Q-0537：是否清空滑动窗口缓存。默认 true（seek 后旧帧号失效，必须释放）。
+    /// 后台预填充传 false：它往**更早**的方向填，UI 线程正在消费的帧依然有效，
+    /// 清掉会让 UI 那一步必然 MISS（实测预填充成果被清 → 该步 1948ms）。
+    /// </param>
+    internal void Flush(bool disposeStepCache)
     {
         lock (lockActions)
             lock (lockCodecCtx)
@@ -339,13 +477,18 @@ public unsafe class VideoDecoder : DecoderBase
                     Status = Status.Stopped;
 
                 DisposeFrames();
+                if (disposeStepCache)
+                    DisposeStepCache(); // Q-0427：seek/flush 后旧缓存的帧号已失效，必须释放（否则泄漏 HW surface）
                 avcodec_flush_buffers(codecCtx);
 
-                isDraining          = false;
-                keyFrameRequired    = false;
-                keyPacketRequired   = !isIntraOnly;
-                StartTime           = AV_NOPTS_VALUE;
-                curSpeedFrame       = 9999;
+                isDraining             = false;
+                keyFrameRequired       = false;
+                keyPacketRequired      = !isIntraOnly;
+                StartTime              = AV_NOPTS_VALUE;
+                curSpeedFrame          = 9999;
+                // Q-0461：每次 Flush 都开启新一轮解码前进，旧的丢弃目标必须作废
+                accurateSeekTargetTs   = AV_NOPTS_VALUE;
+                accurateSeekDropped    = 0;
             }
     }
 
@@ -354,6 +497,20 @@ public unsafe class VideoDecoder : DecoderBase
     bool isDraining;
     protected override void RunInternal()
     {
+        // Q-0463：恢复播放即释放逐帧滑动窗口缓存。
+        // 逐帧后退时解码器是暂停的，缓存里的 K 帧持续持有 HW surface；此前只有
+        // seek（Flush）或停止（Dispose）才释放，导致"逐帧完继续播放"期间一直白占
+        // K × 单帧（4K 约 12.4MB/帧）显存 —— 实测就是"显存一直涨、停止播放才掉"。
+        // 起播说明已离开逐帧上下文，旧窗口（围绕旧位置）也不可能再命中。
+        // 与 UI 线程共用 lockActions：ShowFramePrev 的缓存读写在同一把锁内。
+        if (StepCache.Count > 0)
+            lock (lockActions)
+                if (StepCache.Count > 0)
+                {
+                    if (CanDebug) Log.Debug($"[StepCache] playback resumed -> release {StepCache.Count} cached frames");
+                    DisposeStepCache();
+                }
+
         if (demuxer.IsReversePlayback)
         {
             RunInternalReverse();
@@ -566,7 +723,7 @@ public unsafe class VideoDecoder : DecoderBase
             return AVERROR_EOF;
         }
 
-        if (ret == AVERROR_ENOMEM) { Log.Error($"{FFmpegEngine.ErrorCodeToMsg(ret)}"); return -1234; }
+        if (ret == AVERROR_ENOMEM) { NoteEnomem(); Log.Error($"{FFmpegEngine.ErrorCodeToMsg(ret)}"); return -1234; }
 
         allowedErrors--;
         if (CanWarn) Log.Warn($"{FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
@@ -604,7 +761,11 @@ public unsafe class VideoDecoder : DecoderBase
             }
 
             if (ret == AVERROR_ENOMEM || ret == AVERROR_EINVAL)
-                { Log.Error($"{FFmpegEngine.ErrorCodeToMsg(ret)}"); return -1234; }
+            {
+                // Q-0486：只对 ENOMEM 计数（EINVAL 多为码流损坏，与显存无关）
+                if (ret == AVERROR_ENOMEM) NoteEnomem();
+                Log.Error($"{FFmpegEngine.ErrorCodeToMsg(ret)}"); return -1234;
+            }
 
             allowedErrors--;
             if (CanWarn) Log.Warn($"{FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
@@ -655,6 +816,33 @@ public unsafe class VideoDecoder : DecoderBase
             ret = FillFromCodec(frame);
             if (ret == -1234)
                 return -1234;
+        }
+
+        // Q-0461：精确 seek 的解码前进阶段——丢弃时间戳早于目标的帧（见字段注释）。
+        // 必须放在 FillFromCodec 之后：首次解码依赖它刷新 PixelFormat / StartTimePts。
+        // 必须放在 FillEnqueueAVFrame（FillPlanes）之前：此时尚未分配 GPU 纹理，丢弃零成本。
+        if (accurateSeekTargetTs != AV_NOPTS_VALUE)
+        {
+            long ts = (long)(frame->pts * VideoStream.Timebase) - demuxer.StartTime;
+
+            if (ts < accurateSeekTargetTs && accurateSeekDropped < maxAccurateSeekDrops)
+            {
+                // Q-0461：第一行丢弃日志是判断 seek 是否正常的决定性证据——
+                // 落点应该只比目标早不到 1 个 GOP；若早了几秒甚至几十秒，说明
+                // demuxer 的 seek 落点本身就不对（此时丢弃只会把画面推得更远）。
+                if (accurateSeekDropped == 0 && CanDebug)
+                    Log.Debug($"[Q-0461] Accurate seek: landing={TicksToTime(ts)} target={TicksToTime(accurateSeekTargetTs)} " +
+                              $"lead={TicksToTime(accurateSeekTargetTs - ts)} (maxDrops={maxAccurateSeekDrops})");
+
+                accurateSeekDropped++;
+                av_frame_unref(frame);
+                return RecvAVFrame();
+            }
+
+            if (ts < accurateSeekTargetTs && CanWarn)
+                Log.Warn($"[Q-0461] Accurate seek target not reached after {accurateSeekDropped} frames, presenting anyway");
+
+            accurateSeekTargetTs = AV_NOPTS_VALUE;
         }
 
         if (skipSpeedFrames > 1)
@@ -1025,9 +1213,23 @@ public unsafe class VideoDecoder : DecoderBase
     /// <param name="frameNumber">Zero based frame index</param>
     /// <param name="backwards">Workaround for VFR for backwards frame stepping</param>
     /// <returns>The requested VideoFrame or null on failure</returns>
-    public VideoFrame GetFrame(int frameNumber, bool backwards = false)
+    /// <param name="cache">Q-0427：传入滑动窗口缓存时，解码路径上的帧会一并存入缓存而不再丢弃。</param>
+    /// <param name="cacheStep">Q-0464：本次后退的帧档（1 / 5 / 10）。缓存按该步长【抽稀】：
+    /// 只存"距目标 step 的整数倍"的帧，窗口跨度 K×step 帧。
+    /// 此前跨度恒为 K 帧且与步长无关，于是 5F/10F 每步跨 5/10 帧、K 个名额只够 K/5、K/10 步
+    /// 就耗尽 —— 击穿频率是 1F 的 5 倍 / 10 倍。抽稀后三个档位都是 K 步一填，显存不变。</param>
+    /// <param name="keepExistingCache">Q-0537：true = 本次 GetFrame 不清空滑动窗口缓存（后台预填充用，见 Flush 的同名参数）。</param>
+    public VideoFrame GetFrame(int frameNumber, bool backwards = false, Dictionary<long, VideoFrame> cache = null, int cacheStep = 1, bool keepExistingCache = false)
     {
         frameNumber = Math.Max(0, frameNumber);
+
+        // Q-0427：seek 落点就是目标帧（Backward 会落到 ≤ target 的 keyframe），
+        // 解码路径 [keyframe..target] 上的帧全部入缓存 —— 一次 seek 顺带填满窗口（≈GOP 帧）。
+        // 【曾尝试】把落点前移到 target-K 以填满更大的窗口，已回退：缓存上限是 K，
+        // 多解的 (路径-K) 帧会被淘汰浪费，1F 反而从 15ms/步 退化到 20ms/步。1F 是最高频操作，
+        // 优先保它；5F/10F 靠 GOP 路径的填充也能做到 ~87ms / ~150ms（仍远快于纯 seek 的 300ms）。
+        // Q-0464：上面"5F/10F 够用"的前提已改 —— 填充改为按帧档抽稀（窗口 K×step 帧、
+        // 只存 step 整数倍的帧），5F/10F 的名额利用率从 K/5、K/10 回到 K 步，显存不变。
         long requiredTimestamp = GetFrameTimestamp(frameNumber);
         long curSeekMcs = requiredTimestamp / 10;
         int curFrameNumber;
@@ -1070,31 +1272,106 @@ public unsafe class VideoDecoder : DecoderBase
             if (ret < 0)
                 return null;
 
-            Flush();
+            Flush(!keepExistingCache);
             checkExtraFrames = false;
 
             if (DecodeFrameNext() != 0)
                 return null;
 
             curFrameNumber = GetFrameNumber2((long)(frame->pts * VideoStream.Timebase));
-            
+
+            // Q-0431：curFixSeekDelta 自适应收敛。
+            // 原实现只在"seek 过头"时累加、永远不回落 —— 一旦被推高（all-intra 流用
+            // SeekFlags.Frame seek 会反复判为"过头"，实测被累积到 2.1 秒），此后【每一次】
+            // seek 都被提前 2 秒：解码路径从 ≤1 个 GOP 膨胀到数百帧，既慢（400ms/步）又让
+            // 滑动窗口缓存只能收到路径头部、下一步必然 miss。
+            // 修正：落点比目标早得离谱（超过 MaxLeadFrames）时，按超出量回收补偿。
+            if (curFixSeekDelta > 0)
+            {
+                int leadFrames = frameNumber - curFrameNumber;
+                if (leadFrames > MaxLeadFrames)
+                {
+                    // FrameDuration 单位 ticks(100ns)；curSeekMcs/curFixSeekDelta 单位微秒 -> /10
+                    long excessMcs = (long)(leadFrames - MaxLeadFrames) * VideoStream.FrameDuration / 10;
+                    curFixSeekDelta = Math.Max(0, curFixSeekDelta - excessMcs);
+                }
+            }
+
             if (curFrameNumber > frameNumber)
             {
                 curFixSeekDelta += FIX_SEEK_DELTA_MCS;
                 continue;
             }
 
+            int cacheFilled = 0;   // Q-0427b：本次已入缓存的帧数（上限 stepCacheK）
+            int pathFrames  = 0;   // Q-0464：本次解码路径的总帧数（供 all-intra 自检，见下）
+
+            // Q-0431：只收 [target - K帧, target] 区间内的帧。此前从路径头部开始收，一旦
+            // 路径被拉长（seek 落点被 curFixSeekDelta 提前数秒），收进来的全是用不到的旧帧，
+            // 下一步必然 miss —— 缓存形同虚设。
+            // Q-0464：跨度由 K 帧改为 K×step 帧（配合下面的抽稀，名额仍是 K 个）。
+            int cacheStepFrames = Math.Max(1, cacheStep);
+            // 空间换算：requiredTimestamp 是【原始 pts】空间（VideoStream.StartTime + n*FD），而
+            // mFrame.Timestamp（缓存键）= pts - demuxer.StartTime（播放器时间轴）。若不减 D，窗口
+            // 起点比缓存键整体高出 D 个 tick，有效窗口 = K - D/帧时长 帧 —— D 较大时（如 TS 音频流
+            // 起点比视频早 12.8s，D=1534 帧）窗口变负，一帧都进不了缓存，每步后退都全量重解
+            // 一个 GOP（实测 3 路 4K120/GOP=120 素材：每步 MISS empty + ~300ms/路）。
+            long cacheWindowStart = requiredTimestamp - demuxer.StartTime
+                                  - (long)Math.Max(0, stepCacheK) * cacheStepFrames * VideoStream.FrameDuration;
             do
             {
-                if (curFrameNumber >= frameNumber ||
-                    (backwards && curFrameNumber + 2 >= frameNumber && GetFrameNumber2((long)(frame->pts * VideoStream.Timebase) + VideoStream.FrameDuration + (VideoStream.FrameDuration / 2)) - curFrameNumber > 1))
-                {   // At least return a previous frame in case of Tb inaccuracy and don't stuck at the same frame
+                bool hit = curFrameNumber >= frameNumber ||
+                    (backwards && curFrameNumber + 2 >= frameNumber && GetFrameNumber2((long)(frame->pts * VideoStream.Timebase) + VideoStream.FrameDuration + (VideoStream.FrameDuration / 2)) - curFrameNumber > 1);
+
+                // Q-0427b：仅在「窗口还没填满」时才为路径帧创建 texture；填满或缓存关闭(K=0)时
+                // 一律走原路径（av_frame_unref 丢弃）。否则一旦 seek 落点异常（路径成百上千帧），
+                // 会为每一帧都建 texture+SRV —— 显存暴涨且耗时失控（4K120 大流上表现为卡死）。
+                bool wantCache = cache != null && cacheFilled < stepCacheK;
+
+                if (hit || wantCache)
+                {
+                    // At least return a previous frame in case of Tb inaccuracy and don't stuck at the same frame
                     var mFrame = FillAVFrame();
                     if (mFrame != null)
-                        return mFrame;
-                }
+                    {
+                        if (hit)
+                        {
+                            // Q-0464：自检改用【路径总帧数】而不是入缓存帧数 ——
+                            // step>1 时会抽稀，短路径（如 3 帧）在 step=5 下一帧都存不进缓存，
+                            // 传 cacheFilled 会算出 avg=0 而把正常流误判成 all-intra 关掉缓存。
+                            SampleStepCachePath(cache, pathFrames); // Q-0427b：GOP=1（all-intra）自动检出
+                            return mFrame;
+                        }
 
-                av_frame_unref(frame);
+                        pathFrames++;
+
+                        // Q-0427：还没到目标 → 这是"路径帧"（原实现在这里 av_frame_unref 直接丢弃，
+                        // 一次 seek 解出的十几帧只留 1 帧，浪费 95%）。解码出来存进滑动窗口缓存，
+                        // 后续逐帧后退可直接取用，不必再 seek。
+                        // Q-0431：只把离目标最近的 K 帧收进缓存，更旧的（窗口起点之前的）
+                        // 解出来后直接释放 —— 它们对"下一步后退"毫无用处，还会占满缓存名额。
+                        // Q-0464：再按帧档抽稀 —— 只存"距目标 step 的整数倍"的帧。
+                        //   不抽稀时 5F/10F 每步跨 5/10 帧，而窗口只有 K 帧跨度，
+                        //   K 个名额只够 K/5、K/10 步（击穿频率是 1F 的 5 倍 / 10 倍）；
+                        //   抽稀后窗口拉到 K×step 帧，K 个名额恰好覆盖 K 步。
+                        long offsetFrames = frameNumber - curFrameNumber;   // 距目标还有几帧
+                        bool aligned = offsetFrames > 0 && offsetFrames % cacheStepFrames == 0;
+
+                        if (mFrame.Timestamp >= cacheWindowStart && aligned)
+                        {
+                            CacheStepFrame(cache, mFrame.Timestamp, mFrame);
+                            cacheFilled++;
+                        }
+                        else
+                            mFrame.Dispose();
+                        // 注意：FillAVFrame 成功后 frame 已被换成新的空 AVFrame，故下面不能再 unref。
+                    }
+                    else if (!hit)
+                        av_frame_unref(frame); // FillAVFrame 失败：frame 未被消耗，仍需释放
+                }
+                else
+                    av_frame_unref(frame);
+
                 if (DecodeFrameNext() != 0)
                     break;
 
@@ -1104,6 +1381,223 @@ public unsafe class VideoDecoder : DecoderBase
 
             return null;
         } while (true);
+    }
+
+    /// <summary>
+    /// Q-0488：把一帧直接放入滑动窗口缓存（供宿主的后台预填充使用）。
+    /// 与 <see cref="CacheStepFrame"/> 同规则：超限淘汰时间戳最小（离当前最远）的一帧。
+    /// </summary>
+    /// <summary>
+    /// Q-0488：把滑动窗口缓存**整个摘出来**（清空字典但不 Dispose 帧，所有权交调用方）。
+    /// 用途：GetFrame 开头会 Flush() → DisposeStepCache() 清空窗口，若在缓存还有未消费的帧时
+    /// 提前填充，那批帧会被一起清掉。故提前填充前先摘出、填充后再回填（见 RestoreStepCacheFrames）。
+    /// </summary>
+    public List<VideoFrame> TakeStepCacheFrames()
+    {
+        var frames = new List<VideoFrame>(StepCache.Count);
+        foreach (var f in StepCache.Values) frames.Add(f);
+        StepCache.Clear();
+        return frames;
+    }
+
+    /// <summary>
+    /// Q-0488：把 TakeStepCacheFrames 摘出的帧回填进滑动窗口（按 <see cref="CacheStepFrame"/> 规则：
+    /// 同键替换、超限淘汰时间戳最小的一帧）。缓存已关闭时直接释放，避免泄漏。
+    /// 注意：回填的旧帧时间戳比新填的帧更大（更靠近当前位置），超限时会优先淘汰**新填的最早帧** ——
+    /// 正是我们想要的：旧帧只剩几步寿命，不能丢；新帧损失几个最早的不影响后续连续命中。
+    /// </summary>
+    public void RestoreStepCacheFrames(IEnumerable<VideoFrame> frames)
+    {
+        if (frames == null) return;
+
+        foreach (var f in frames)
+        {
+            if (f == null) continue;
+            if (stepCacheK <= 0) { f.Dispose(); continue; }
+            CacheStepFrame(StepCache, f.Timestamp, f);
+        }
+    }
+
+    /// <summary>
+    /// Q-0488：滑动窗口缓存里**最早**（时间戳最小）那一帧的时间戳。
+    /// 预填充以它为基准继续往前填，才不会与"还没消费的帧"抢额度；缓存为空时返回 AV_NOPTS_VALUE。
+    /// </summary>
+    public long StepCacheOldestTs
+    {
+        get
+        {
+            lock (stepCacheLock)
+            {
+                if (StepCache.Count == 0) return AV_NOPTS_VALUE;
+                var oldest = long.MaxValue;
+                foreach (var key in StepCache.Keys)
+                    if (key < oldest) oldest = key;
+                return oldest;
+            }
+        }
+    }
+    public void PushStepCacheFrame(VideoFrame frame)
+    {
+        if (frame == null) return;
+        if (stepCacheK <= 0) { frame.Dispose(); return; }
+        CacheStepFrame(StepCache, frame.Timestamp, frame);
+    }
+
+    /// <summary>
+    /// Q-0427：把一帧放入滑动窗口缓存；超出窗口（stepCacheK）时丢弃【帧号最小 = 离当前最远】的一帧并释放
+    /// （VideoFrame.Dispose 幂等，会释放 texture / AVFrame，HW 下即归还 decoder surface）。
+    /// 只缓存"未返回给调用者"的路径帧 —— 返回给调用者的帧会交给 VideoCache 渲染，生命周期由它管理，
+    /// 若同时留在缓存里被 Dispose 会导致正在显示的帧被提前释放。
+    /// </summary>
+    void CacheStepFrame(Dictionary<long, VideoFrame> cache, long timestamp, VideoFrame mFrame)
+    {
+        if (cache == null || stepCacheK <= 0) { mFrame.Dispose(); return; }
+
+        // 同时间戳重复解码（Tb 抖动会让同一帧被解两次）：先释放旧帧，否则其 texture / HW surface 泄漏
+        if (cache.TryGetValue(timestamp, out var old))
+        {
+            old.Dispose();
+            cache.Remove(timestamp);
+        }
+
+        cache[timestamp] = mFrame;
+
+        while (cache.Count > stepCacheK)
+        {
+            long oldest = long.MaxValue;   // 时间戳最小 = 离当前最远（后退方向）
+            foreach (var key in cache.Keys)
+                if (key < oldest) oldest = key;
+
+            cache[oldest].Dispose();
+            cache.Remove(oldest);
+        }
+    }
+
+    /// <summary>
+    /// Q-0427b：滑动窗口收益自检。累计每次填充的"路径长度"（本次顺带缓存了几帧），
+    /// 采样满 StepCachePathSampleCount 次后求平均：
+    /// ≤1 视为 all-intra（GOP=1）—— 每帧都是关键帧，seek 一次直达，缓存零收益却白占
+    /// HW surface（4K 下 K=20 ≈ +250MB；4K120/72GB 大流上曾压垮解码导致画面不动），
+    /// 故自动关闭缓存并释放已缓存的帧（归还 surface）。
+    /// 采样窗口每轮重置，编码参数变化（如切到 GOP 大的素材）后能重新判定。
+    /// </summary>
+    void SampleStepCachePath(Dictionary<long, VideoFrame> cache, int filled)
+    {
+        if (cache == null || stepCacheK <= 0) return;
+
+        stepCachePathSamples++;
+        stepCachePathTotal += filled;
+        if (stepCachePathSamples < StepCachePathSampleCount) return;
+
+        double avg = (double)stepCachePathTotal / stepCachePathSamples;
+        stepCachePathSamples = 0;
+        stepCachePathTotal = 0;
+
+        if (avg <= 1.0)
+        {
+            if (CanDebug)
+                Log.Debug($"[StepCache] all-intra detected (avg path {avg:F2} <= 1) -> disable sliding cache, release {StepCache.Count} frames");
+
+            int released = StepCache.Count;
+            stepCacheK = 0;
+            DisposeStepCache(); // 注意：返回的那一帧不在此缓存内（生命周期归 VideoCache），安全
+
+            // Q-0432b：关闭事件写入诊断串（Flyleaf 内部 Log 不落盘，宿主靠 StepCacheDiag 打印）。
+            // 会覆盖本次的 MISS —— 没关系，事件只发生一次且比 miss 更重要；之后每步打 off。
+            StepCacheDiag = $"all-intra detected (avg path {avg:F2}) -> cache disabled, released {released} frames";
+        }
+    }
+
+    /// <summary>
+    /// Q-0427：逐帧后退/前进时先查滑动窗口缓存。命中即从缓存移除并返回 true
+    /// （移除后该帧生命周期转交调用方 / VideoCache，避免被缓存 later Dispose）。
+    /// </summary>
+    /// <summary> Q-0431 临时诊断：最近一次缓存查询的结果（供宿主打印，Flyleaf 自己的 Log 不落盘）。 </summary>
+    internal string StepCacheDiag = "";
+
+    /// <summary>
+    /// Q-0463：上一次【从缓存取出的】帧时间戳，用于识别"假命中"（连续两次取同一帧 = 没推进）。
+    /// 只在缓存命中时更新；Flush / DisposeStepCache 时复位（跳转后位置基准已变）。
+    /// </summary>
+    long stepCacheLastServedTs = AV_NOPTS_VALUE;
+
+    /// <summary>
+    /// Q-0431：按【Player 时间轴】查询滑动窗口缓存。目标时间 = curTime - step × 帧时长；
+    /// 容差 ±半帧（pts 量化会让目标时间与缓存里的 Timestamp 差一点，精确相等匹配会落空）。
+    /// </summary>
+    public bool TryGetCachedStepFrame(long curTime, int step, out VideoFrame frame)
+    {
+        long target = curTime - (long)step * VideoStream.FrameDuration;
+        long tol = VideoStream.FrameDuration / 2 + 1;
+
+        // Q-0432b：缓存已被 all-intra 自检关闭（GOP=1：每帧都是关键帧，seek 一次直达，
+        // 缓存零收益）—— 明确打 off，避免被误读成"缓存失效（MISS）"。
+        if (stepCacheK <= 0)
+        {
+            StepCacheDiag = $"off ts={target} K=0";
+            frame = null;
+            return false;
+        }
+
+        // Q-0537：整个查询/取出过程与后台预填充的合并互斥（字典并发读写会损坏结构）。
+        lock (stepCacheLock)
+        {
+        if (stepCacheK > 0 && StepCache.Count > 0)
+        {
+            long best = 0, bestDiff = long.MaxValue;
+            foreach (var key in StepCache.Keys)
+            {
+                long diff = Math.Abs(key - target);
+                if (diff < bestDiff) { bestDiff = diff; best = key; }
+            }
+
+            if (bestDiff <= tol)
+            {
+                // Q-0463：连续两次取到【同一帧】= 位置没有推进 —— 这是"假命中"，必须判为未命中，
+                // 让上层走真实 seek 并在诊断串里标 STALE。
+                // 实测形态：解码器 Too many errors 停摆后 CurTime 冻结，每步 target 都相同，
+                // 而缓存又被同一次填充反复塞进同一帧，于是日志一直是
+                // "hit ts=… got=… d=112 left=0"（连续 30 次同一个 ts），画面定格却看不出已卡死。
+                // 判定为 STALE 后：不再静默成功，诊断串与后续 MISS 会如实反映问题。
+                if (best == stepCacheLastServedTs)
+                {
+                    StepCacheDiag = $"STALE ts={target} same={best} left={StepCache.Count} K={stepCacheK} s={step} (no progress -> miss)";
+                    frame = null;
+                    return false;
+                }
+
+                frame = StepCache[best];
+                StepCache.Remove(best);
+                stepCacheLastServedTs = best;
+                StepCacheDiag = $"hit ts={target} got={best} d={bestDiff} left={StepCache.Count} K={stepCacheK} s={step}";
+                return true;
+            }
+
+            StepCacheDiag = $"MISS ts={target} nearest={best} d={bestDiff} n={StepCache.Count} K={stepCacheK} s={step}";
+        }
+        else
+            StepCacheDiag = $"MISS ts={target} empty K={stepCacheK}";
+        }
+
+        frame = null;
+        return false;
+    }
+
+    /// <summary>
+    /// Q-0427：释放滑动窗口缓存。seek / Flush / Dispose 时必须调用 —— 缓存的帧持有 HW decoder
+    /// surface 与显存，不清会持续占用；且 seek 之后旧缓存的帧号已无意义。
+    /// </summary>
+    internal void DisposeStepCache()
+    {
+        lock (stepCacheLock)
+        {
+        foreach (var f in StepCache.Values)
+            f.Dispose();
+        StepCache.Clear();
+        // Q-0463：缓存作废后"上一次取出的帧"也失去意义（位置基准已变），必须复位，
+        // 否则跳转后恰好解到同一时间戳会被误判成 STALE。
+        stepCacheLastServedTs = AV_NOPTS_VALUE;
+        }
     }
 
     /// <summary>
@@ -1215,6 +1709,12 @@ public unsafe class VideoDecoder : DecoderBase
 
             if (ret != 0 && ret != AVERROR(EAGAIN))
             {
+                // Q-0486：逐帧填充走的是 DecodeFrameNext（解码线程走的是 RecvAVFrame，那里已记
+                // NoteEnomem）。此处此前不识别 ENOMEM —— HW surface 池耗尽时只刷 Warn 日志，
+                // 宿主侧 EnomemCount 恒为 0，于是"显存被 K 撑爆"在宿主日志里毫无痕迹，
+                // 现场只表现为"逐帧突然每步数百毫秒"而无从归因（K=119 / 3 路 4K 实测 2.2 万次 -12）。
+                if (ret == AVERROR_ENOMEM) NoteEnomem();
+
                 if (CanWarn) Log.Warn($"{FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
 
                 if (allowedErrors-- < 1)
@@ -1316,6 +1816,7 @@ public unsafe class VideoDecoder : DecoderBase
     protected override void DisposeInternal()
     {   // Called by Dispose (lockActions) | TBR: lock (lockCodecCtx)?
         DisposeFrames();
+        DisposeStepCache(); // Q-0427：缓存的帧持有 HW surface / 显存，Dispose 时必须释放
         StartTime       = AV_NOPTS_VALUE;
         swFallback      = false;
         curSpeedFrame   = 9999;

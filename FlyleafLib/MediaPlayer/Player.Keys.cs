@@ -74,7 +74,7 @@ partial class Player
             player.onKeyUpBinding = null; // In case of keyboard lost capture (should be handled from hosts)
         }
 
-        List<KeyBinding> keysList = new();
+        List<KeyBinding> keysList = [];
         var spanList = CollectionsMarshal.AsSpan(player.Config.Player.KeyBindings.Keys); // should create dictionary here with key+alt+ctrl+shift hash
         foreach(var binding in spanList)
             if (binding.Key == key)
@@ -143,7 +143,7 @@ public class KeysConfig
 
     internal void SetPlayer(Player player)
     {
-        Keys ??= new List<KeyBinding>();
+        Keys ??= [];
 
         if (!player.Config.Loaded && Keys.Count == 0)
             LoadDefault();
@@ -276,7 +276,7 @@ public class KeysConfig
     public void LoadDefault()
     {
         if (Keys == null)
-            Keys = new List<KeyBinding>();
+            Keys = [];
         else
             Keys.Clear();
 
@@ -479,7 +479,7 @@ public class KeysConfig
                 return player.SpeedDown2;
 
             case KeyBindingAction.ShowPrevFrame:
-                return player.ShowFramePrev;
+                return () => player.ShowFramePrev();   // Q-0427：ShowFramePrev 加 step 参数后方法组不匹配，改 lambda
 
             case KeyBindingAction.ShowNextFrame:
                 return player.ShowFrameNext;
@@ -496,7 +496,7 @@ public class KeysConfig
 
         return null;
     }
-    private static HashSet<KeyBindingAction> isKeyUpBinding = new()
+    private static readonly HashSet<KeyBindingAction> isKeyUpBinding = new()
     {
         // TODO: Should Fire once one KeyDown and not again until KeyUp is fired (in case of Tasks keep track of already running actions?)
 

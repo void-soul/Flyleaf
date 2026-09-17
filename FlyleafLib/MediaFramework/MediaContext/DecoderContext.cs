@@ -87,7 +87,7 @@ public unsafe partial class DecoderContext : PluginHandler
     #endregion
 
     #region Initialize
-    LogHandler Log;
+    readonly LogHandler Log;
     bool shouldDispose;
     public DecoderContext(Config config = null, int uniqueId = -1, bool enableDecoding = true, Player player = null) : base(config, uniqueId)
     {
@@ -152,22 +152,32 @@ public unsafe partial class DecoderContext : PluginHandler
         {
             long seekTimestamp = CalcSeekTimestamp(VideoDemuxer, ms, ref forward);
 
+            // Q-0461：见 VideoDecoder.accurateSeekTargetTs / CalcSeekBackTimestamp 注释。
+            // 全 I 帧流每帧都是 IDR，seek 落点天然正确，无需回退也无需丢弃。
+            bool accurateSeek   = !VideoDecoder.isIntraOnly;
+            long maxLeadTicks   = 0;
+            long seekBackTs     = seekTimestamp;
+            if (accurateSeek)
+                seekBackTs = CalcSeekBackTimestamp(seekTimestamp, forward, out maxLeadTicks);
+
             // Should exclude seek in queue for all "local/fast" files
             lock (VideoDemuxer.lockActions)
-            if (Playlist.InputType == InputType.Torrent || ms == 0 || !seekInQueue || VideoDemuxer.SeekInQueue(seekTimestamp, forward) != 0)
+            if (Playlist.InputType == InputType.Torrent || ms == 0 || !seekInQueue || VideoDemuxer.SeekInQueue(seekBackTs, forward) != 0)
             {
                 VideoDemuxer.Interrupter.ForceInterrupt = 1;
                 OpenedPlugin.OnBuffering();
                 lock (VideoDemuxer.lockFmtCtx)
                 {
                     if (VideoDemuxer.Disposed) { VideoDemuxer.Interrupter.ForceInterrupt = 0; return -1; }
-                    ret = VideoDemuxer.Seek(seekTimestamp, forward);
+                    ret = VideoDemuxer.Seek(seekBackTs, forward);
                 }
             }
 
             VideoDecoder.Flush();
             if (ms == 0)
                 VideoDecoder.keyFrameRequired = VideoDecoder.keyPacketRequired = false; // TBR
+            else if (accurateSeek)
+                VideoDecoder.SetAccurateSeekTarget(seekTimestamp - VideoDemuxer.StartTime, maxLeadTicks);
 
             if (AudioStream != null && AudioDecoder.OnVideoDemuxer)
             {
@@ -317,6 +327,32 @@ public unsafe partial class DecoderContext : PluginHandler
         }
 
         return ticks;
+    }
+
+    // Q-0461：demuxer 实际请求的 seek 时刻 = 目标 - 1 个 GOP - 1 帧。
+    // 为什么必须多回退一个 GOP：mpegts + HEVC 的 av_seek_frame(BACKWARD) 落点 L 位于
+    // 【目标所在 GOP 的内部】（实测 -ss 落在该 GOP 的 IDR+11 帧），目标之前的那个 IDR
+    // 已被越过；解码器随后"丢弃非关键包直到下一个 IDR"，而那个 IDR 必定晚于目标 ——
+    // 每次 seek 都过冲最多 1 个 GOP，多机位还会因 GOP 相位不同而互相错开。
+    // 回退 1 个 GOP 后：落点 L' <= T-GOP，其所在 GOP 起点 G <= L'，故下一个 IDR
+    // = G+GOP <= L'+GOP <= T —— 必定不晚于目标，剩下交给解码器丢弃早于目标的帧。
+    // 再减 1 帧用于消除时间基取整误差。
+    // 仅 backward：forward 时 SeekInQueue 传入更早的时间戳会破坏"向前找"的语义，
+    // 故 forward 保持原行为（其落点本就在目标之后，不会比现在更差）。
+    private long CalcSeekBackTimestamp(long seekTimestamp, bool forward, out long maxLeadTicks)
+    {
+        maxLeadTicks = 0;
+        if (forward) return seekTimestamp;
+
+        // GOP 取 Demuxer.MeasuredGopTicks（Q-0458，已在 Seek 时重置采样点）。
+        // 未测到前用 2 秒兜底（覆盖 120fps 下最长 240 帧的 GOP）。
+        long gopTicks   = VideoDemuxer.MeasuredGopTicks > 0 ? VideoDemuxer.MeasuredGopTicks : 2 * 10_000_000L;
+        long frameTicks = VideoDecoder.VideoStream != null ? VideoDecoder.VideoStream.FrameDuration : 0;
+
+        // 解码前进阶段允许丢弃的最大跨度（4 倍 GOP 余量，保底 2 秒）。
+        maxLeadTicks = Math.Max(4 * gopTicks, 2 * 10_000_000L);
+
+        return Math.Max(VideoDemuxer.StartTime, seekTimestamp - gopTicks - frameTicks);
     }
     #endregion
 
@@ -631,7 +667,7 @@ public unsafe partial class DecoderContext : PluginHandler
     }
 
     #region Recorder
-    Remuxer Recorder;
+    readonly Remuxer Recorder;
     public event EventHandler RecordingCompleted;
     public bool IsRecording => VideoDecoder.isRecording || AudioDecoder.isRecording;
     int oldMaxAudioFrames;

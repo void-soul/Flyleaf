@@ -29,7 +29,8 @@ public unsafe class Demuxer : RunThreadBase
     public long                     StartTime       { get; private set; }
     public DateTime                 StartRealTime   { get; private set; }
     public long                     Duration        { get; internal set; }
-    public void ForceDuration(long duration) { Duration = duration; IsLive = duration != 0; }
+    // BLOT MODIFICATION (#12): only update Duration, never touch IsLive (Q-0442)
+    public void ForceDuration(long duration) { Duration = duration; }
 
     public Dictionary<string, string>
                                     Metadata        { get; internal set; } = [];
@@ -153,6 +154,10 @@ public unsafe class Demuxer : RunThreadBase
     internal long           hlsStartTime            = NoTs; // Calculation of first timestamp (lastPacketTs - hlsCurDuration)
     long                    hlsCurDuration;                 // Duration until the start of the current segment
     long                    lastSeekTime;                   // To set CurTime while no packets are available
+    // Q-0458：实测 GOP（相邻关键帧的 pts 间隔，ticks）。上层（生长文件跳末尾）用它推导
+    // 安全落点，而不是读相机配置——配置与实际流可能不一致（Q-0440 已就此告警过）。
+    long                    lastKeyPacketPts        = NoTs;
+    public long             MeasuredGopTicks        { get; private set; }
 
     public object           lockFmtCtx              = new();
     internal bool           allowReadInterrupts;
@@ -175,9 +180,9 @@ public unsafe class Demuxer : RunThreadBase
     long                    curReverseSeekOffset;
 
     // Required for passing AV Options and HTTP Query params to the underlying contexts
-    AVFormatContext_io_open ioopen;
+    readonly AVFormatContext_io_open ioopen;
     AVFormatContext_io_open ioopenDefault;
-    AVDictionary*           avoptCopy;
+    readonly AVDictionary*           avoptCopy;
     Dictionary<string, string>
                             queryParams;
     byte[]                  queryCachedBytes;
@@ -1047,6 +1052,8 @@ public unsafe class Demuxer : RunThreadBase
                     fmtCtx->ctx_flags &= ~FmtCtxFlags.Unseekable;
 
                 Interrupter.SeekRequest();
+                // Q-0458：seek 会打断包序列，保留旧的 lastKeyPacketPts 会算出跨越跳转的假 GOP
+                lastKeyPacketPts = NoTs;
                 if (VideoStream != null)
                 {
                     if (CanDebug) Log.Debug($"[Seek({(forward ? "->" : "<-")})] Requested at {new TimeSpan(ticks)}");
@@ -1224,12 +1231,19 @@ public unsafe class Demuxer : RunThreadBase
 
                 // BLOT MODIFICATION START: Dynamic duration update for growing MPEGTS files
                 // Purpose: Allow player to auto-refresh progress bar when playing recording TS files
-                // Date: 2024
+                // Date: 2024 | Fixed 2026-09-14 (Q-0488): subtract StartTime
                 // See: FLYLEAF_MODIFICATIONS.md for upgrade instructions
                 if (Name == "mpegts" && packet->pts != NoTs)
                 {
                     var stream = AVStreamToStream[packet->stream_index];
-                    long currentPtsTicks = (long)(packet->pts * stream.Timebase);
+                    // Q-0488：packet->pts 是容器【绝对】时间戳，而 Duration 是【相对】时长，两者口径不同。
+                    // 本工程录制端产出的 TS，首帧 PTS 是相机/编码器开机后的累计时间（实测某批样本
+                    // 为 47000~66000 秒），远大于文件自身时长 —— 不减 StartTime 时，读到第一帧就满足
+                    // `currentPtsTicks > Duration`，把 Duration 顶成首帧绝对时间：
+                    // 实测 12:44 的文件被显示成 14:48（53334.9s），时间轴总长、进度条、JumpToLast 全错。
+                    // 播放时间轴 = 容器时间轴 − StartTime，与 Renderer.*.cs / DecoderContext.CalcSeekTimestamp
+                    // 的既有换算完全一致（StartTime 为 0 时行为与修改前相同）。
+                    long currentPtsTicks = (long)(packet->pts * stream.Timebase) - StartTime;
                     if (currentPtsTicks > Duration)
                     {
                         Duration = currentPtsTicks;
@@ -1280,7 +1294,20 @@ public unsafe class Demuxer : RunThreadBase
                             //Log($"Video => {TicksToTime((long)(packet->pts * VideoStream.Timebase))} | {TicksToTime(CurTime)}");
 
                             if (packet->pts != NoTs)
+                            {
                                 lastVideoPacketPts = packet->pts;
+
+                                // Q-0458：用相邻关键帧间隔实测 GOP。
+                                // 取「最近一次」而非最大值——断流重连造成的超长间隔不会
+                                // 把 GOP 永久撑大；未测到时保持 0，由上层回退到保守值。
+                                if ((packet->flags & PktFlags.Key) != 0)
+                                {
+                                    if (lastKeyPacketPts != NoTs && packet->pts > lastKeyPacketPts)
+                                        MeasuredGopTicks = (long)((packet->pts - lastKeyPacketPts) * VideoStream.Timebase);
+
+                                    lastKeyPacketPts = packet->pts;
+                                }
+                            }
 
                             VideoPackets.Enqueue(packet);
                             packet = av_packet_alloc();
@@ -1779,7 +1806,7 @@ public unsafe class Demuxer : RunThreadBase
         else if (Name == "mpeg")
             return "mpeg";
 
-        List<string> supportedOutput = new() { "mp4", "avi", "flv", "flac", "mpeg", "mpegts", "mkv", "ogg", "ts"};
+        List<string> supportedOutput = ["mp4", "avi", "flv", "flac", "mpeg", "mpegts", "mkv", "ogg", "ts"];
         string defaultExtenstion = "mp4";
         bool hasPcm = false;
         bool isRaw = false;

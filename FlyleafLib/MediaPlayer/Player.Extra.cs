@@ -3,7 +3,6 @@ using System.Windows;
 
 using FlyleafLib.MediaFramework.MediaDecoder;
 using FlyleafLib.MediaFramework.MediaDemuxer;
-using FlyleafLib.MediaFramework.MediaFrame;
 
 namespace FlyleafLib.MediaPlayer;
 
@@ -164,7 +163,12 @@ unsafe partial class Player
             reversePlaybackResync = true;
         }
     }
-    public void ShowFramePrev()
+    /// <summary> Q-0431：最近一次逐帧后退的滑动窗口缓存查询细节（Flyleaf 的 Log 不落盘，由宿主打印到 [StepCache] 行）。 </summary>
+    public string? LastStepCacheDiag { get; private set; }
+
+    /// <param name="step">Q-0427：一次后退的帧数（默认 1 = 逐帧；5F/10F 帧档传 5/10，
+    /// 走同一条缓存路径——命中滑动窗口即免 seek）。</param>
+    public void ShowFramePrev(int step = 1)
     {
         if (!Video.IsOpened || !canPlay || VideoDemuxer.IsHLSLive)
             return;
@@ -197,15 +201,87 @@ unsafe partial class Player
             {
                 reversePlaybackResync = true; // Temp fix for previous timestamps until we seperate GetFrame for Extractor and the Player
                 Renderer.Frames.PushCurrentToLast();
-                vFrame = VideoDecoder.GetFrame(VideoDecoder.GetFrameNumber(CurTime) - 1, true);
+
+                // Q-0427：逐帧后退先查滑动窗口缓存——命中即取（无 seek、无解码，~0ms）。
+                // step>1（5F/10F 帧档）走同一条路径：一次跳 step 帧，缓存命中同样免费。
+                int targetFrame = Math.Max(0, VideoDecoder.GetFrameNumber(CurTime) - step);
+                // Q-0431：按时间轴（而非帧号）查缓存，避免 demuxer.StartTime 造成的口径错位
+                if (!VideoDecoder.TryGetCachedStepFrame(CurTime, step, out vFrame))
+                    // 未命中：走原 seek 路径，并把解码路径上的帧一并填入滑动窗口缓存
+                    // （原本这些帧会被全部丢弃，导致每退一帧都要重新 seek —— GOP=15 时 310ms/步）。
+                    // Q-0464：把 step 传进去，填充时按帧档抽稀 —— 窗口跨度 K×step 帧、
+                    // 只存"距目标 step 整数倍"的帧，让 K 个名额在 5F/10F 下也能覆盖 K 步。
+                    vFrame = VideoDecoder.GetFrame(targetFrame, true, VideoDecoder.StepCache, step);
+
                 if (vFrame == null) return;
                 vFrames.Enqueue(vFrame, true);
+                // Q-0431：把缓存查询细节暴露给宿主打印（Flyleaf 自己的 Log 不落盘）
+                LastStepCacheDiag = VideoDecoder.StepCacheDiag;
+            }
+            else
+            {
+                // Q-0432b：本步走队列快速路径（未经缓存查询）—— 清掉上一步的诊断串，避免宿主重复打旧值
+                LastStepCacheDiag = null;
             }
 
             if (CanDebug) Log.Debug($"SFB: {VideoDecoder.GetFrameNumber(vFrame.Timestamp)}");
 
             Renderer.RenderRequest(vFrame);
             UpdateCurTime(vFrame.Timestamp);
+        }
+    }
+
+    /// <summary> Q-0488：滑动窗口缓存里当前剩余的帧数（0 = 下一次后退必然 seek + 解码）。 </summary>
+    public int StepCacheCount => VideoDecoder.StepCache.Count;
+
+    /// <summary>
+    /// Q-0488：后退逐帧的**缓存预填充** —— 只做 seek + 解码并填充滑动窗口，**不渲染**。
+    /// 用意：多路（2/3 路）同时需要填充时，各路的解码可以并行（各 Player 的
+    /// AVFormatContext / AVCodecContext / AVFrame / Renderer 互相独立，锁也是实例级的），
+    /// 而渲染要碰 D3D11 immediate context（非线程安全），必须留在 UI 线程由
+    /// <see cref="ShowFramePrev(int)"/> 完成。于是"三路串行各 300ms"变成"并行一次 300ms"。
+    ///
+    /// 与 ShowFramePrev 差一步：本方法以【当前帧】为填充目标，于是 [target-K, target-1] 落入
+    /// 缓存，紧接着 ShowFramePrev 要的正是 target-1 → 命中（0ms 出画）。
+    /// 失败不影响主流程 —— ShowFramePrev 会退回它自己的 seek 路径。
+    /// </summary>
+    /// <param name="step">帧档（1/5/10），需与随后的 ShowFramePrev 保持一致。</param>
+    public void PrefillStepCacheForPrev(int step = 1)
+    {
+        if (!Video.IsOpened || !canPlay || VideoDemuxer.IsHLSLive) return;
+        if (VideoDecoder.StepCacheWindow <= 0) return;   // 缓存关闭（K=0 / all-intra）时无意义
+
+        // Q-0537：本方法在**后台线程**执行（宿主用 Task.Run 调度），因此：
+        // ① 帧先填进独立的 staging 字典，完成后由 MergeStepCacheFrames 一次性并入 ——
+        //    避免后台长时间持有/改写 UI 线程正在查询的窗口；
+        // ② keepExistingCache: true —— GetFrame 开头的 Flush() 默认会 DisposeStepCache()，
+        //    那会清空 UI 线程正在消费的帧（实测预填充成果被清 → 该步 1948ms）。
+        var staging = new Dictionary<long, FlyleafLib.MediaFramework.MediaFrame.VideoFrame>();
+        try
+        {
+            // 目标 = 当前窗口里**最早**的那一帧再往前 step 帧，接着旧窗口继续补；
+            // 窗口为空时才用"下一步要显示的帧"。
+            // 直接以"当前帧"为目标会与尚未消费的帧抢额度，且当前帧恰为关键帧时（fast seek 落点
+            // 就是关键帧）解码路径长度 0，一帧都填不进去 —— 两种情况都会让预填充白跑。
+            var oldest = VideoDecoder.StepCacheOldestTs;
+            int targetFrame = oldest == AV_NOPTS_VALUE
+                ? Math.Max(0, VideoDecoder.GetFrameNumber(CurTime) - step)
+                : Math.Max(0, VideoDecoder.GetFrameNumber(oldest) - step);
+
+            var frame = VideoDecoder.GetFrame(targetFrame, true, staging, step, keepExistingCache: true);
+            if (frame != null)
+                // 目标帧本身也入缓存：ShowFramePrev 随后在 UI 线程命中它并渲染
+                // （渲染必须留在 UI 线程，D3D11 immediate context 不是线程安全的）
+                staging[frame.Timestamp] = frame;
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[StepCache] prefill failed: {ex.Message}");
+        }
+        finally
+        {
+            // 即使失败也要并入已填到的部分（不浪费已付的解码代价）
+            VideoDecoder.MergeStepCacheFrames(staging.Values);
         }
     }
 

@@ -201,6 +201,17 @@ partial class Player
     public void SeekAccurate(int ms)
         => Seek(ms, false, !IsLive);
 
+    /// <summary>
+    /// BLOT MODIFICATION (#13) Q-0452：即使源是 Live（仍在生长的录制文件）也按精确时间戳定位。
+    /// 原生 SeekAccurate() 传的是 accurate: !IsLive —— 录制中回看的文件 IsLive=true，
+    /// 于是每次跳末尾都退化成"退到最近关键帧"，实际落点比请求值早最多 1 个 GOP（实测 1.001s）。
+    /// 调用方已用安全余量把落点推离写前沿，此处再强制精确，保证落点与请求一致且从关键帧起解。
+    /// </summary>
+    /// <param name="ms">目标时间戳（毫秒）</param>
+    /// <param name="forceAccurate">true = 无视 IsLive，强制走"退到关键帧 + 解码到目标"的精确路径</param>
+    public void SeekAccurate(int ms, bool forceAccurate)
+        => Seek(ms, false, forceAccurate || !IsLive);
+
     public void ToggleSeekAccurate()
         => Config.Player.SeekAccurate = !Config.Player.SeekAccurate;
 

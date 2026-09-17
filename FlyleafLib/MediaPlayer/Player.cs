@@ -72,7 +72,7 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
     /// (Normally you should not access this directly)
     /// </summary>
     public VideoDecoder         VideoDecoder;
-    VideoCache vFrames;
+    readonly VideoCache vFrames;
 
     /// <summary>
     /// Player's Renderer
@@ -126,7 +126,7 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
     /// (Normally you should not access this directly)
     /// </summary>
     public Demuxer              VideoDemuxer;
-    PacketQueue vPackets;
+    readonly PacketQueue vPackets;
 
     /// <summary>
     /// Subtitles Demuxer
@@ -266,11 +266,10 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
 
         this.duration = duration;
         MainDemuxer.ForceDuration(duration);
-        isLive = MainDemuxer.IsLive;
+        // BLOT MODIFICATION (#12): do not re-read isLive here (Q-0442)
         UI(() =>
         {
             Duration= this.duration;
-            IsLive  = isLive;
         });
     }
 
