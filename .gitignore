@@ -352,3 +352,9 @@ yt-dlp.exe
 
 **/*tmp*
 **/verifyout
+
+# Local QA log database (qa-log skill)
+qa.db
+
+# NuGet lock files (generated locally, RestorePackagesWithLockFile not enabled)
+packages.lock.json
