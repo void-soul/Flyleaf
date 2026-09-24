@@ -1,11 +1,10 @@
-﻿using SharpGen.Runtime;
-
-using FlyleafLib.MediaFramework.MediaDemuxer;
+﻿using FlyleafLib.MediaFramework.MediaDemuxer;
 using FlyleafLib.MediaFramework.MediaFrame;
 using FlyleafLib.MediaFramework.MediaRemuxer;
 using FlyleafLib.MediaFramework.MediaRenderer;
 using FlyleafLib.MediaFramework.MediaStream;
 using FlyleafLib.MediaPlayer;
+using SharpGen.Runtime;
 
 namespace FlyleafLib.MediaFramework.MediaDecoder;
 
@@ -21,29 +20,29 @@ namespace FlyleafLib.MediaFramework.MediaDecoder;
 
 public unsafe class VideoDecoder : DecoderBase
 {
-    public Action           OpeningCodec;
-    public Renderer         Renderer            { get; private set; }
-    public bool             VideoAccelerated    { get; internal set; }
+    public Action OpeningCodec;
+    public Renderer Renderer { get; private set; }
+    public bool VideoAccelerated { get; internal set; }
 
-    public VideoStream      VideoStream         => (VideoStream) Stream;
+    public VideoStream VideoStream => (VideoStream)Stream;
 
-    public long             StartTime           { get; internal set; } = AV_NOPTS_VALUE;
-    public long             StartRecordTime     { get; internal set; } = AV_NOPTS_VALUE;
+    public long StartTime { get; internal set; } = AV_NOPTS_VALUE;
+    public long StartRecordTime { get; internal set; } = AV_NOPTS_VALUE;
 
-    internal bool           keyPacketRequired;
-    internal bool           keyFrameRequired;   // Broken formats even with key packet don't return key frame
-    internal bool           isIntraOnly;
-    bool                    checkKeyFrame;
-    bool                    swFallback;
-    long                    startPts;
-    long                    lastFixedPts;
+    internal bool keyPacketRequired;
+    internal bool keyFrameRequired;   // Broken formats even with key packet don't return key frame
+    internal bool isIntraOnly;
+    bool checkKeyFrame;
+    bool swFallback;
+    long startPts;
+    long lastFixedPts;
 
-    bool                    checkExtraFrames; // DecodeFrameNext
-    int                     curFrameWidth, curFrameHeight; // To catch 'codec changed'
+    bool checkExtraFrames; // DecodeFrameNext
+    int curFrameWidth, curFrameHeight; // To catch 'codec changed'
 
     // Hot paths / Same instance
-    readonly VideoCache              Frames;
-    PacketQueue             vPackets;
+    readonly VideoCache Frames;
+    PacketQueue vPackets;
 
     // Q-0427 滑动窗口缓存：帧号 → 解码后的帧。只缓存当前帧【之前】的帧（供逐帧后退取用）；
     // 前进方向不必缓存——解码线程本就在流式预解（Frames 队列）。
@@ -54,18 +53,18 @@ public unsafe class VideoDecoder : DecoderBase
     // 而 demuxer.StartTime 会在 seek 后变化，导致两侧系统性错位（实测偏 229 帧 → 缓存 100% 落空）。
     // Timestamp 与 Player.CurTime 同基准（FillPlanes 里已减掉 Demuxer.StartTime），两侧天然一致。
     internal readonly Dictionary<long, VideoFrame> StepCache = [];
-    int                     stepCacheK;
+    int stepCacheK;
 
     // Q-0463：HW surface 池的空闲余量（见 Open2 中 extra_hw_frames 的注释）。
-    public const int        SurfaceMarginFrames     = 8;
+    public const int SurfaceMarginFrames = 8;
 
     // Q-0486：ENOMEM（surface 池耗尽）计数。
     // 该错误原本只写进 Flyleaf 自己的日志（宿主日志里完全看不到），现场表现为
     // "画面定格 / 逐帧每步数百毫秒"却无从归因。此处累计计数并暴露给宿主
     // （PlayerGridControl）打显式告警行。解码线程写、UI 线程读 → 用 Interlocked / Volatile。
-    int                     enomemCount;
-    int                     enomemConsumed;
-    long                    lastEnomemTick;
+    int enomemCount;
+    int enomemConsumed;
+    long lastEnomemTick;
 
     /// <summary> 自打开以来累计的 ENOMEM 次数（跨线程安全）。 </summary>
     public int EnomemCount => System.Threading.Volatile.Read(ref enomemCount);
@@ -98,31 +97,31 @@ public unsafe class VideoDecoder : DecoderBase
     // 还能顺带缓存几帧）。GOP=1 时每帧都是关键帧，路径长度恒 ≤1，缓存零收益却白占 HW surface
     // （4K 下 K=20 ≈ +250MB），在 4K120/72GB 这类大流上会压垮解码导致画面不动。
     // 采样若干次后若平均 ≤1 则自动关闭缓存并释放已缓存帧。
-    int                     stepCachePathSamples;
-    int                     stepCachePathTotal;
-    const int               StepCachePathSampleCount = 8;   // 采样 8 次后判定（避免单帧抖动误判）
+    int stepCachePathSamples;
+    int stepCachePathTotal;
+    const int StepCachePathSampleCount = 8;   // 采样 8 次后判定（避免单帧抖动误判）
 
     // Reverse Playback
     ConcurrentStack<List<nint>>
-                            curReverseVideoStack    = [];
-    List<nint>              curReverseVideoPackets  = [];
-    readonly List<VideoFrame>        curReverseVideoFrames   = [];
-    int                     curReversePacketPos     = 0;
+                            curReverseVideoStack = [];
+    List<nint> curReverseVideoPackets = [];
+    readonly List<VideoFrame> curReverseVideoFrames = [];
+    int curReversePacketPos = 0;
 
     // Drop frames if FPS is higher than allowed
-    int                     curSpeedFrame           = 9999; // don't skip first frame (on start/after seek-flush)
-    double                  skipSpeedFrames         = 0;
+    int curSpeedFrame = 9999; // don't skip first frame (on start/after seek-flush)
+    double skipSpeedFrames = 0;
 
     // Fixes Seek Backwards failure on broken formats
-    long                    curFixSeekDelta         = 0;
-    const long              FIX_SEEK_DELTA_MCS      = 2_100_000;
+    long curFixSeekDelta = 0;
+    const long FIX_SEEK_DELTA_MCS = 2_100_000;
 
     // Q-0431：FIX_SEEK_DELTA_MCS 是【一次 2.1 秒】的粗粒度回退（为 seek backward 失败的格式设计），
     // 而 curFixSeekDelta 原实现只增不减 —— 只要触发过一次，此后每一次 seek 都被永久提前 2.1 秒：
     // 解码路径从 ≤1 个 GOP 膨胀到数百帧（实测 252 帧），既慢又让滑动窗口缓存收不到有用的尾部帧。
     // MaxLeadFrames = seek 落点允许比目标早的最大帧数（正常回退最多 1 个 GOP，留余量取 20）；
     // 超出的部分按比例回收 curFixSeekDelta，使其能自愈。
-    const int               MaxLeadFrames           = 20;
+    const int MaxLeadFrames = 20;
 
     // Q-0461：精确 seek（"回退到目标前一个 IDR + 解码前进 + 丢弃早于目标的帧"）。
     // 背景：mpegts + HEVC 的 av_seek_frame(BACKWARD) 落点在【目标所在 GOP 的内部】
@@ -132,9 +131,9 @@ public unsafe class VideoDecoder : DecoderBase
     // （实测两份样本开头孤儿帧分别为 96 / 112）而互相错开最多 1 个 GOP。
     // 解法：seek 时多回退一个 GOP，保证落点之后的第一个 IDR <= 目标；再丢弃时间戳
     // 早于目标的帧，使所有机位精确落在同一时刻 T（与 GOP 相位无关）。
-    long                    accurateSeekTargetTs    = AV_NOPTS_VALUE; // 相对 demuxer.StartTime 的 ticks(100ns)
-    int                     accurateSeekDropped;
-    int                     maxAccurateSeekDrops    = 60;   // 由 SetAccurateSeekTarget 按时间预算换算
+    long accurateSeekTargetTs = AV_NOPTS_VALUE; // 相对 demuxer.StartTime 的 ticks(100ns)
+    int accurateSeekDropped;
+    int maxAccurateSeekDrops = 60;   // 由 SetAccurateSeekTarget 按时间预算换算
 
     // Q-0461：本类【不】自己测 GOP —— 用 Demuxer.MeasuredGopTicks（Q-0458 已实现，
     // 且在 Demuxer.Seek 里把 lastKeyPacketPts 置 NoTs 以避免跨越跳转算出假 GOP）。
@@ -143,8 +142,8 @@ public unsafe class VideoDecoder : DecoderBase
     // 于是每次回退 seek 都减 84 秒、被 clamp 到文件开头，落点归零。
     internal void SetAccurateSeekTarget(long targetTs, long maxLeadTicks)
     {
-        accurateSeekTargetTs    = targetTs;
-        accurateSeekDropped     = 0;
+        accurateSeekTargetTs = targetTs;
+        accurateSeekDropped = 0;
 
         // 丢弃预算必须是【时间】而非帧数：正常只需 <= 1 个 GOP；给 4 倍余量并保底 2 秒。
         // 之前写死 400 帧，在 120fps 是 3.3s、在 30fps 却是 13.3s —— 帧率一变就失控。
@@ -160,8 +159,8 @@ public unsafe class VideoDecoder : DecoderBase
 
         if (createRenderer)
         {
-            Renderer= new(this, UniqueId, player);
-            Frames  = Renderer.Frames;
+            Renderer = new(this, UniqueId, player);
+            Frames = Renderer.Frames;
         }
     }
 
@@ -169,21 +168,21 @@ public unsafe class VideoDecoder : DecoderBase
     public CodecSpec CurCodecSpec;
     readonly AVCodecContext_get_format getHWformat;
 
-    internal const AVPixelFormat    HW_PIX_FMT  = AVPixelFormat.D3d11;
-    internal const AVHWDeviceType   HW_DEVICE   = AVHWDeviceType.D3d11va;
+    internal const AVPixelFormat HW_PIX_FMT = AVPixelFormat.D3d11;
+    internal const AVHWDeviceType HW_DEVICE = AVHWDeviceType.D3d11va;
 
     public class CodecSpec
     {
-        public string   Name;
+        public string Name;
         public AVCodec* Codec;
-        public bool     IsHW;
-        public bool     IsEmpty => Codec == null;
+        public bool IsHW;
+        public bool IsEmpty => Codec == null;
 
         internal static CodecSpec Empty = new();
     }
-    static readonly ConcurrentDictionary<AVCodecID,  CodecSpec> hwSpecs  = [];
-    static readonly ConcurrentDictionary<AVCodecID,  CodecSpec> swSpecs  = [];
-    static readonly ConcurrentDictionary<string,     CodecSpec> specs    = [];
+    static readonly ConcurrentDictionary<AVCodecID, CodecSpec> hwSpecs = [];
+    static readonly ConcurrentDictionary<AVCodecID, CodecSpec> swSpecs = [];
+    static readonly ConcurrentDictionary<string, CodecSpec> specs = [];
     static CodecSpec FindHWDecoder(AVCodecID id)
     {
         if (hwSpecs.TryGetValue(id, out CodecSpec spec))
@@ -198,10 +197,10 @@ public unsafe class VideoDecoder : DecoderBase
 
             int i = 0;
             AVCodecHWConfig* config;
-            while((config = avcodec_get_hw_config(codec, i++)) != null)
+            while ((config = avcodec_get_hw_config(codec, i++)) != null)
                 if (config->pix_fmt == HW_PIX_FMT && config->methods.HasFlag(AVCodecHwConfigMethod.HwDeviceCtx))
                 {
-                    spec = new() { Codec = codec, Name = BytePtrToStringUTF8(codec->name), IsHW = true};
+                    spec = new() { Codec = codec, Name = BytePtrToStringUTF8(codec->name), IsHW = true };
                     hwSpecs[codec->id] = spec;
                     return spec;
                 }
@@ -235,7 +234,7 @@ public unsafe class VideoDecoder : DecoderBase
         bool isHW = false;
         int i = 0;
         AVCodecHWConfig* config;
-        while((config = avcodec_get_hw_config(codec, i++)) != null)
+        while ((config = avcodec_get_hw_config(codec, i++)) != null)
             if (config->pix_fmt == HW_PIX_FMT && config->methods.HasFlag(AVCodecHwConfigMethod.HwDeviceCtx))
             {
                 isHW = true;
@@ -338,9 +337,9 @@ public unsafe class VideoDecoder : DecoderBase
             return false;
         }
 
-        codecCtx->pkt_timebase  = Stream.AVStream->time_base;
-        codecCtx->codec_id      = CurCodecSpec.Codec->id; // avcodec_parameters_to_context will change this we need to set Stream's Codec Id (eg we change mp2 to mp3)
-        codecCtx->apply_cropping= 0;
+        codecCtx->pkt_timebase = Stream.AVStream->time_base;
+        codecCtx->codec_id = CurCodecSpec.Codec->id; // avcodec_parameters_to_context will change this we need to set Stream's Codec Id (eg we change mp2 to mp3)
+        codecCtx->apply_cropping = 0;
 
         if (Config.Decoder.ShowCorrupted)
             codecCtx->flags |= CodecFlags.OutputCorrupt;
@@ -360,7 +359,7 @@ public unsafe class VideoDecoder : DecoderBase
 
         var codecOpts = Config.Decoder.VideoCodecOpt;
         AVDictionary* avopt = null;
-        foreach(var optKV in codecOpts)
+        foreach (var optKV in codecOpts)
             _ = av_dict_set(&avopt, optKV.Key, optKV.Value, 0);
 
         VideoAccelerated = VideoAccelerated && CurCodecSpec.IsHW;
@@ -372,12 +371,12 @@ public unsafe class VideoDecoder : DecoderBase
              * Seems to work fine with D3D11VP (if we pass the right texture from frame->data[0])
              */
 
-            codecCtx->thread_count      = 1;
-            codecCtx->hwaccel_flags    |= HWAccelFlags.IgnoreLevel;
+            codecCtx->thread_count = 1;
+            codecCtx->hwaccel_flags |= HWAccelFlags.IgnoreLevel;
             if (Config.Decoder.AllowProfileMismatch)
-                codecCtx->hwaccel_flags|= HWAccelFlags.AllowProfileMismatch;
-            codecCtx->get_format        = getHWformat;
-            codecCtx->hw_device_ctx     = av_buffer_ref(Renderer.ffDevice);
+                codecCtx->hwaccel_flags |= HWAccelFlags.AllowProfileMismatch;
+            codecCtx->get_format = getHWformat;
+            codecCtx->hw_device_ctx = av_buffer_ref(Renderer.ffDevice);
             // Q-0427：+1 for Renderer's LastFrame；再 +FrameCacheWindow，因为滑动窗口缓存的帧
             // 会长期持有 surface（不缓存则会抽干池 → 解码线程卡死）。代价是显存按窗口线性增长。
             // Q-0463：池还要【留余量】。池容量 = MaxVideoFrames + 1 + K 时，同时持有者恰好是
@@ -385,12 +384,12 @@ public unsafe class VideoDecoder : DecoderBase
             // 解码器自己（DPB / 参考帧 / 在途帧）拿到 0 个空闲 surface → avcodec 返回
             // ENOMEM(-12)（实测 4K120 / K=119 时 12462 次，紧接着 Too many errors 停摆）。
             // 故额外给出 SurfaceMarginFrames 个空闲 surface。
-            codecCtx->extra_hw_frames   = Config.Decoder.MaxVideoFrames + 1
+            codecCtx->extra_hw_frames = Config.Decoder.MaxVideoFrames + 1
                                         + Math.Max(0, Config.Decoder.FrameCacheWindow)
                                         + SurfaceMarginFrames;
         }
         else
-            codecCtx->thread_count      = Math.Min(Config.Decoder.VideoThreads, codecCtx->codec_id == AVCodecID.Hevc ? 32 : 16);
+            codecCtx->thread_count = Math.Min(Config.Decoder.VideoThreads, codecCtx->codec_id == AVCodecID.Hevc ? 32 : 16);
 
         ret = avcodec_open2(codecCtx, null, avopt == null ? null : &avopt);
         if (ret < 0)
@@ -402,7 +401,7 @@ public unsafe class VideoDecoder : DecoderBase
 
         if (avopt != null)
         {
-            AVDictionaryEntry *t = null;
+            AVDictionaryEntry* t = null;
             while ((t = av_dict_get(avopt, "", t, DictReadFlags.IgnoreSuffix)) != null)
                 Log.Debug($"Ignoring codec option {BytePtrToStringUTF8(t->key)}");
 
@@ -412,19 +411,19 @@ public unsafe class VideoDecoder : DecoderBase
         if (codecCtx->codec_descriptor != null)
             isIntraOnly = codecCtx->codec_descriptor->props.HasFlag(CodecPropFlags.IntraOnly);
 
-        vPackets            = demuxer.VideoPackets;
+        vPackets = demuxer.VideoPackets;
         // Q-0427：窗口半径在 Open 时快照——它决定了 extra_hw_frames（surface 池），
         // 运行中改配置不会重建解码器，故这里取一次即可。
-        stepCacheK          = Math.Max(0, Config.Decoder.FrameCacheWindow);
-        keyFrameRequired    = keyPacketRequired = false; // allow no key packet after open (lot of videos missing this)
-        filledFromCodec     = false;
-        isDraining          = false;
-        lastFixedPts        = 0; // TBR: might need to set this to first known pts/dts
-        startPts            = VideoStream.StartTimePts;
-        allowedErrors       = Config.Decoder.MaxErrors;
+        stepCacheK = Math.Max(0, Config.Decoder.FrameCacheWindow);
+        keyFrameRequired = keyPacketRequired = false; // allow no key packet after open (lot of videos missing this)
+        filledFromCodec = false;
+        isDraining = false;
+        lastFixedPts = 0; // TBR: might need to set this to first known pts/dts
+        startPts = VideoStream.StartTimePts;
+        allowedErrors = Config.Decoder.MaxErrors;
 
         // Not all codecs fill key frame flag | https://github.com/SuRGeoNix/Flyleaf/issues/638 | Old MOV/MP4 container marking packets loosely as key
-        checkKeyFrame       = codecCtx->codec_id != AVCodecID.Av1 &&
+        checkKeyFrame = codecCtx->codec_id != AVCodecID.Av1 &&
                              (VideoAccelerated ||
                               codecCtx->codec_id != AVCodecID.Vp8 && codecCtx->codec_id != AVCodecID.Vp9 && codecCtx->codec_id != AVCodecID.Qtrle);
 
@@ -481,14 +480,14 @@ public unsafe class VideoDecoder : DecoderBase
                     DisposeStepCache(); // Q-0427：seek/flush 后旧缓存的帧号已失效，必须释放（否则泄漏 HW surface）
                 avcodec_flush_buffers(codecCtx);
 
-                isDraining             = false;
-                keyFrameRequired       = false;
-                keyPacketRequired      = !isIntraOnly;
-                StartTime              = AV_NOPTS_VALUE;
-                curSpeedFrame          = 9999;
+                isDraining = false;
+                keyFrameRequired = false;
+                keyPacketRequired = !isIntraOnly;
+                StartTime = AV_NOPTS_VALUE;
+                curSpeedFrame = 9999;
                 // Q-0461：每次 Flush 都开启新一轮解码前进，旧的丢弃目标必须作废
-                accurateSeekTargetTs   = AV_NOPTS_VALUE;
-                accurateSeekDropped    = 0;
+                accurateSeekTargetTs = AV_NOPTS_VALUE;
+                accurateSeekDropped = 0;
             }
     }
 
@@ -519,7 +518,7 @@ public unsafe class VideoDecoder : DecoderBase
 
         int sleepMs = Config.Player.MaxLatency == 0 ? 10 : 2;
         int ret;
-        AVPacket *packet;
+        AVPacket* packet;
 
         do
         {
@@ -554,10 +553,10 @@ public unsafe class VideoDecoder : DecoderBase
                         lock (lockStatus)
                         {
                             Log.Debug("Draining");
-                            isDraining          = true;
-                            var drainPacket     = av_packet_alloc();
-                            drainPacket->data   = null;
-                            drainPacket->size   = 0;
+                            isDraining = true;
+                            var drainPacket = av_packet_alloc();
+                            drainPacket->data = null;
+                            drainPacket->size = 0;
                             vPackets.Enqueue(drainPacket);
                         }
 
@@ -577,15 +576,15 @@ public unsafe class VideoDecoder : DecoderBase
                         }
 
                         lock (demuxer.lockStatus)
-                        lock (lockStatus)
-                        {
-                            if (demuxer.Status == Status.Pausing || demuxer.Status == Status.Paused)
-                                Status = Status.Pausing;
-                            else if (demuxer.Status != Status.Ended)
-                                Status = Status.Stopping;
-                            else
-                                continue;
-                        }
+                            lock (lockStatus)
+                            {
+                                if (demuxer.Status == Status.Pausing || demuxer.Status == Status.Paused)
+                                    Status = Status.Pausing;
+                                else if (demuxer.Status != Status.Ended)
+                                    Status = Status.Stopping;
+                                else
+                                    continue;
+                            }
 
                         break;
                     }
@@ -628,7 +627,7 @@ public unsafe class VideoDecoder : DecoderBase
                         break; // else EOF
                     }
                 }
-                
+
                 packet = vPackets.Dequeue();
 
                 if (packet == null)
@@ -693,10 +692,10 @@ public unsafe class VideoDecoder : DecoderBase
                 if (CanDebug) Log.Debug("Ignoring non-key packet");
                 av_packet_free(&packet);
                 return AVERROR_EAGAIN;
-                
+
             }
 
-            keyFrameRequired  = checkKeyFrame && packet->pts != startPts;
+            keyFrameRequired = checkKeyFrame && packet->pts != startPts;
             keyPacketRequired = false;
         }
 
@@ -783,7 +782,7 @@ public unsafe class VideoDecoder : DecoderBase
                 av_frame_unref(frame);
                 return RecvAVFrame();
             }
-            
+
             keyFrameRequired = false;
         }
 
@@ -866,7 +865,7 @@ public unsafe class VideoDecoder : DecoderBase
         {
             mFrame = Renderer.FillPlanes(ref frame);
         }
-        catch(SharpGenException e)
+        catch (SharpGenException e)
         {
             Log.Error($"FillAVFrame failed ({e.ResultCode.NativeApiCode} | {Renderer.Device.DeviceRemovedReason.NativeApiCode} | {e.Message})");
             ResetLocal();
@@ -912,8 +911,8 @@ public unsafe class VideoDecoder : DecoderBase
         }
         Renderer.Reset(pausePlayer: false, fromDecoder: true);
         Open2(Stream, null, false);
-        keyPacketRequired   = !isIntraOnly;
-        keyFrameRequired    = false;
+        keyPacketRequired = !isIntraOnly;
+        keyFrameRequired = false;
     }
     #endregion
 
@@ -921,11 +920,11 @@ public unsafe class VideoDecoder : DecoderBase
     {
         filledFromCodec = true;
         curFixSeekDelta = 0;
-        curFrameWidth   = frame->width;
-        curFrameHeight  = frame->height;
+        curFrameWidth = frame->width;
+        curFrameHeight = frame->height;
 
         VideoStream.Refresh(this, frame);
-        startPts        = VideoStream.StartTimePts;
+        startPts = VideoStream.StartTimePts;
         skipSpeedFrames = speed * VideoStream.FPS / (Config.Video.MaxOutputFps + 1);
 
         int ret = 0;
@@ -962,14 +961,14 @@ public unsafe class VideoDecoder : DecoderBase
             fixed (AVCodecContext** ptr = &codecCtx)
                 avcodec_free_context(ptr);
 
-        codecCtx            = null;
-        swFallback          = true;
+        codecCtx = null;
+        swFallback = true;
         bool keyRequiredOld = keyPacketRequired;
         ret = Open2(Stream, null, false); // TBR:  Dispose() on failure could cause a deadlock
-        keyPacketRequired   = keyRequiredOld;
-        keyFrameRequired    = false;
-        swFallback          = false;
-        filledFromCodec     = false;
+        keyPacketRequired = keyRequiredOld;
+        keyFrameRequired = false;
+        swFallback = false;
+        filledFromCodec = false;
 
         return ret;
     }
@@ -978,7 +977,7 @@ public unsafe class VideoDecoder : DecoderBase
     {   // BUG: with B-frames, we should not remove the ref packets (we miss frames each time we restart decoding the gop)
         int ret = 0;
         int allowedErrors = Config.Decoder.MaxErrors;
-        AVPacket *packet;
+        AVPacket* packet;
 
         do
         {
@@ -1012,15 +1011,15 @@ public unsafe class VideoDecoder : DecoderBase
                         }
 
                         lock (demuxer.lockStatus)
-                        lock (lockStatus)
-                        {
-                            if (demuxer.Status == Status.Pausing || demuxer.Status == Status.Paused)
-                                Status = Status.Pausing;
-                            else if (demuxer.Status != Status.Ended)
-                                Status = Status.Stopping;
-                            else
-                                continue;
-                        }
+                            lock (lockStatus)
+                            {
+                                if (demuxer.Status == Status.Pausing || demuxer.Status == Status.Paused)
+                                    Status = Status.Pausing;
+                                else if (demuxer.Status != Status.Ended)
+                                    Status = Status.Stopping;
+                                else
+                                    continue;
+                            }
 
                         break;
                     }
@@ -1110,7 +1109,7 @@ public unsafe class VideoDecoder : DecoderBase
                         if (frame->best_effort_timestamp != AV_NOPTS_VALUE)
                             frame->pts = frame->best_effort_timestamp;
                         else if (frame->pts == AV_NOPTS_VALUE)
-                            { av_frame_unref(frame); continue; }
+                        { av_frame_unref(frame); continue; }
 
                         bool shouldProcess = curReverseVideoPackets.Count - curReversePacketPos < Config.Decoder.MaxVideoFrames - Config.Decoder.MaxVideoFramesPrev; // TBR: Back Cache* (probably should add this somewhere else too
 
@@ -1133,7 +1132,7 @@ public unsafe class VideoDecoder : DecoderBase
 
                     if (curReversePacketPos == curReverseVideoPackets.Count)
                     {
-                        curReverseVideoPackets.RemoveRange(Math.Max(0, Config.Decoder.MaxVideoFramesPrev + curReverseVideoPackets.Count - Config.Decoder.MaxVideoFrames), Math.Min(curReverseVideoPackets.Count, Config.Decoder.MaxVideoFrames - Config.Decoder.MaxVideoFramesPrev) );
+                        curReverseVideoPackets.RemoveRange(Math.Max(0, Config.Decoder.MaxVideoFramesPrev + curReverseVideoPackets.Count - Config.Decoder.MaxVideoFrames), Math.Min(curReverseVideoPackets.Count, Config.Decoder.MaxVideoFrames - Config.Decoder.MaxVideoFramesPrev));
                         avcodec_flush_buffers(codecCtx);
                         curReversePacketPos = 0;
 
@@ -1304,7 +1303,7 @@ public unsafe class VideoDecoder : DecoderBase
             }
 
             int cacheFilled = 0;   // Q-0427b：本次已入缓存的帧数（上限 stepCacheK）
-            int pathFrames  = 0;   // Q-0464：本次解码路径的总帧数（供 all-intra 自检，见下）
+            int pathFrames = 0;   // Q-0464：本次解码路径的总帧数（供 all-intra 自检，见下）
 
             // Q-0431：只收 [target - K帧, target] 区间内的帧。此前从路径头部开始收，一旦
             // 路径被拉长（seek 落点被 curFixSeekDelta 提前数秒），收进来的全是用不到的旧帧，
@@ -1542,41 +1541,41 @@ public unsafe class VideoDecoder : DecoderBase
         // Q-0537：整个查询/取出过程与后台预填充的合并互斥（字典并发读写会损坏结构）。
         lock (stepCacheLock)
         {
-        if (stepCacheK > 0 && StepCache.Count > 0)
-        {
-            long best = 0, bestDiff = long.MaxValue;
-            foreach (var key in StepCache.Keys)
+            if (stepCacheK > 0 && StepCache.Count > 0)
             {
-                long diff = Math.Abs(key - target);
-                if (diff < bestDiff) { bestDiff = diff; best = key; }
-            }
-
-            if (bestDiff <= tol)
-            {
-                // Q-0463：连续两次取到【同一帧】= 位置没有推进 —— 这是"假命中"，必须判为未命中，
-                // 让上层走真实 seek 并在诊断串里标 STALE。
-                // 实测形态：解码器 Too many errors 停摆后 CurTime 冻结，每步 target 都相同，
-                // 而缓存又被同一次填充反复塞进同一帧，于是日志一直是
-                // "hit ts=… got=… d=112 left=0"（连续 30 次同一个 ts），画面定格却看不出已卡死。
-                // 判定为 STALE 后：不再静默成功，诊断串与后续 MISS 会如实反映问题。
-                if (best == stepCacheLastServedTs)
+                long best = 0, bestDiff = long.MaxValue;
+                foreach (var key in StepCache.Keys)
                 {
-                    StepCacheDiag = $"STALE ts={target} same={best} left={StepCache.Count} K={stepCacheK} s={step} (no progress -> miss)";
-                    frame = null;
-                    return false;
+                    long diff = Math.Abs(key - target);
+                    if (diff < bestDiff) { bestDiff = diff; best = key; }
                 }
 
-                frame = StepCache[best];
-                StepCache.Remove(best);
-                stepCacheLastServedTs = best;
-                StepCacheDiag = $"hit ts={target} got={best} d={bestDiff} left={StepCache.Count} K={stepCacheK} s={step}";
-                return true;
-            }
+                if (bestDiff <= tol)
+                {
+                    // Q-0463：连续两次取到【同一帧】= 位置没有推进 —— 这是"假命中"，必须判为未命中，
+                    // 让上层走真实 seek 并在诊断串里标 STALE。
+                    // 实测形态：解码器 Too many errors 停摆后 CurTime 冻结，每步 target 都相同，
+                    // 而缓存又被同一次填充反复塞进同一帧，于是日志一直是
+                    // "hit ts=… got=… d=112 left=0"（连续 30 次同一个 ts），画面定格却看不出已卡死。
+                    // 判定为 STALE 后：不再静默成功，诊断串与后续 MISS 会如实反映问题。
+                    if (best == stepCacheLastServedTs)
+                    {
+                        StepCacheDiag = $"STALE ts={target} same={best} left={StepCache.Count} K={stepCacheK} s={step} (no progress -> miss)";
+                        frame = null;
+                        return false;
+                    }
 
-            StepCacheDiag = $"MISS ts={target} nearest={best} d={bestDiff} n={StepCache.Count} K={stepCacheK} s={step}";
-        }
-        else
-            StepCacheDiag = $"MISS ts={target} empty K={stepCacheK}";
+                    frame = StepCache[best];
+                    StepCache.Remove(best);
+                    stepCacheLastServedTs = best;
+                    StepCacheDiag = $"hit ts={target} got={best} d={bestDiff} left={StepCache.Count} K={stepCacheK} s={step}";
+                    return true;
+                }
+
+                StepCacheDiag = $"MISS ts={target} nearest={best} d={bestDiff} n={StepCache.Count} K={stepCacheK} s={step}";
+            }
+            else
+                StepCacheDiag = $"MISS ts={target} empty K={stepCacheK}";
         }
 
         frame = null;
@@ -1591,12 +1590,12 @@ public unsafe class VideoDecoder : DecoderBase
     {
         lock (stepCacheLock)
         {
-        foreach (var f in StepCache.Values)
-            f.Dispose();
-        StepCache.Clear();
-        // Q-0463：缓存作废后"上一次取出的帧"也失去意义（位置基准已变），必须复位，
-        // 否则跳转后恰好解到同一时间戳会被误判成 STALE。
-        stepCacheLastServedTs = AV_NOPTS_VALUE;
+            foreach (var f in StepCache.Values)
+                f.Dispose();
+            StepCache.Clear();
+            // Q-0463：缓存作废后"上一次取出的帧"也失去意义（位置基准已变），必须复位，
+            // 否则跳转后恰好解到同一时间戳会被误判成 STALE。
+            stepCacheLastServedTs = AV_NOPTS_VALUE;
         }
     }
 
@@ -1691,7 +1690,7 @@ public unsafe class VideoDecoder : DecoderBase
                         continue;
                     }
 
-                    keyFrameRequired  = checkKeyFrame && pkt->pts != startPts;
+                    keyFrameRequired = checkKeyFrame && pkt->pts != startPts;
                     keyPacketRequired = false;
                 }
 
@@ -1718,7 +1717,7 @@ public unsafe class VideoDecoder : DecoderBase
                 if (CanWarn) Log.Warn($"{FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
 
                 if (allowedErrors-- < 1)
-                    { Log.Error("Too many errors!"); return ret; }
+                { Log.Error("Too many errors!"); return ret; }
 
                 continue;
             }
@@ -1817,9 +1816,9 @@ public unsafe class VideoDecoder : DecoderBase
     {   // Called by Dispose (lockActions) | TBR: lock (lockCodecCtx)?
         DisposeFrames();
         DisposeStepCache(); // Q-0427：缓存的帧持有 HW surface / 显存，Dispose 时必须释放
-        StartTime       = AV_NOPTS_VALUE;
-        swFallback      = false;
-        curSpeedFrame   = 9999;
+        StartTime = AV_NOPTS_VALUE;
+        swFallback = false;
+        curSpeedFrame = 9999;
     }
     #endregion
 
@@ -1833,10 +1832,10 @@ public unsafe class VideoDecoder : DecoderBase
     {
         if (Disposed || isRecording) return;
 
-        StartRecordTime     = AV_NOPTS_VALUE;
-        curRecorder         = remuxer;
-        recKeyPacketRequired= false;
-        isRecording         = true;
+        StartRecordTime = AV_NOPTS_VALUE;
+        curRecorder = remuxer;
+        recKeyPacketRequired = false;
+        isRecording = true;
     }
     internal void StopRecording() => isRecording = false;
     #endregion

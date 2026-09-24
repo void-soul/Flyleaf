@@ -1,7 +1,6 @@
-﻿using System.Diagnostics;
-
-using FlyleafLib.MediaFramework.MediaDecoder;
+﻿using FlyleafLib.MediaFramework.MediaDecoder;
 using FlyleafLib.MediaFramework.MediaFrame;
+using System.Diagnostics;
 
 namespace FlyleafLib.MediaPlayer;
 
@@ -48,8 +47,8 @@ unsafe partial class Player
         if (CanDebug) Log.Debug($"OnBufferingCompleted{(error != null ? $" (Error: {error})" : "")}");
     }
 
-    long    onBufferingStarted;
-    long    onBufferingCompleted;
+    long onBufferingStarted;
+    long onBufferingCompleted;
 
     readonly Stopwatch sw = new();
 
@@ -61,7 +60,7 @@ unsafe partial class Player
 
         Log.Error($"ShowOneFrame #{vFrame.Id}");
         Renderer.RenderRequest(vFrame);
-        
+
         UpdateCurTime(vFrame.Timestamp);
         showFrameCount++;
 
@@ -93,7 +92,7 @@ unsafe partial class Player
         decoder.AudioStream.Demuxer.Start();
         AudioDecoder.Start();
 
-        while(AudioDecoder.Frames.IsEmpty && IsPlaying && AudioDecoder.IsRunning)
+        while (AudioDecoder.Frames.IsEmpty && IsPlaying && AudioDecoder.IsRunning)
             Thread.Sleep(10);
 
         AudioDecoder.Frames.TryPeek(out aFrame);
@@ -102,8 +101,8 @@ unsafe partial class Player
             return;
 
         UpdateCurTime(aFrame.Timestamp, false);
-        
-        while(seeks.IsEmpty && decoder.AudioStream.Demuxer.BufferedDuration < Config.Player.MinBufferDuration && AudioDecoder.Frames.Count < Config.Decoder.MaxAudioFrames / 2 && IsPlaying && decoder.AudioStream.Demuxer.IsRunning && decoder.AudioStream.Demuxer.Status != MediaFramework.Status.QueueFull)
+
+        while (seeks.IsEmpty && decoder.AudioStream.Demuxer.BufferedDuration < Config.Player.MinBufferDuration && AudioDecoder.Frames.Count < Config.Decoder.MaxAudioFrames / 2 && IsPlaying && decoder.AudioStream.Demuxer.IsRunning && decoder.AudioStream.Demuxer.Status != MediaFramework.Status.QueueFull)
             Thread.Sleep(20);
     }
     private void ScreamerAudioOnly()
@@ -174,7 +173,7 @@ unsafe partial class Player
                         break;
 
                     Audio.AddSamples(aFrame);
-                    bufferedDuration += (long) ((aFrame.dataLen / 4) * Audio.Timebase);
+                    bufferedDuration += (long)((aFrame.dataLen / 4) * Audio.Timebase);
                     UpdateCurTime(aFrame.Timestamp, false);
                 } while (bufferedDuration < 100 * 10000);
 
@@ -223,7 +222,7 @@ unsafe partial class Player
                 while (vFrames.IsEmpty && status == Status.Playing && VideoDecoder.IsRunning) Thread.Sleep(15);
                 OnBufferingCompleted();
                 if (!vFrames.TryDequeue(out vFrame))
-                    { Log.Warn("No video frame"); break; }
+                { Log.Warn("No video frame"); break; }
 
                 startTicks = vFrame.Timestamp;
                 UpdateCurTime(vFrame.Timestamp, false);
@@ -231,9 +230,9 @@ unsafe partial class Player
                 sw.Restart();
             }
 
-            elapsedTicks    = (long)(sw.ElapsedTicks * SWFREQ_TO_TICKS);
-            vDistanceMs     = (int) ((((startTicks - vFrame.Timestamp) / speed) - elapsedTicks) / 10000);
-            sleepMs         = vDistanceMs - 1;
+            elapsedTicks = (long)(sw.ElapsedTicks * SWFREQ_TO_TICKS);
+            vDistanceMs = (int)((((startTicks - vFrame.Timestamp) / speed) - elapsedTicks) / 10000);
+            sleepMs = vDistanceMs - 1;
 
             if (sleepMs < 0) sleepMs = 0;
 
@@ -262,7 +261,7 @@ unsafe partial class Player
             UpdateCurTime(vFrame.Timestamp, false);
 
             vFrame = null;
-            int dequeueRetries  = MAX_DEQUEUE_RETRIES;
+            int dequeueRetries = MAX_DEQUEUE_RETRIES;
             while (!isVideoSwitch && !vFrames.TryDequeue(out vFrame) && dequeueRetries-- > 0)
                 Thread.Sleep(1);
         }
@@ -306,12 +305,12 @@ unsafe partial class Player
 
 public class BufferingCompletedArgs : EventArgs
 {
-    public string   Error       { get; }
-    public bool     Success     { get; }
+    public string Error { get; }
+    public bool Success { get; }
 
     public BufferingCompletedArgs(string error)
     {
-        Error   = error;
+        Error = error;
         Success = Error == null;
     }
 }

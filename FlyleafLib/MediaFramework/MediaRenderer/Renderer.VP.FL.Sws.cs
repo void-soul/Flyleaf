@@ -1,14 +1,13 @@
-﻿using Vortice.Direct3D;
+﻿using FlyleafLib.MediaFramework.MediaFrame;
+using Vortice.Direct3D;
 using Vortice.DXGI;
-
-using FlyleafLib.MediaFramework.MediaFrame;
 
 namespace FlyleafLib.MediaFramework.MediaRenderer;
 
 public unsafe partial class Renderer
 {
-    AVFrame*        swsFrame;
-    SwsContext*     swsCtx;
+    AVFrame* swsFrame;
+    SwsContext* swsCtx;
 
     bool SwsConfig()
     {   // Sws Color Convert (no scalling) | Visible dimensions (still needs manual user's + stream's crop)
@@ -17,9 +16,9 @@ public unsafe partial class Renderer
         var codecCtx = VideoDecoder.CodecCtx;
 
         swsFrame = av_frame_alloc();
-        swsFrame->format= (int)AVPixelFormat.Rgba;
+        swsFrame->format = (int)AVPixelFormat.Rgba;
         swsFrame->width = codecCtx->width;
-        swsFrame->height= codecCtx->height;
+        swsFrame->height = codecCtx->height;
         _ = av_frame_get_buffer(swsFrame, 0);
 
         swsCtx = sws_getContext(
@@ -29,26 +28,26 @@ public unsafe partial class Renderer
             swsFrame->width,
             swsFrame->height,
             AVPixelFormat.Rgba, SwsFlags.None, null, null, null);
-        
+
         if (swsCtx == null)
         {
             if (swsFrame != null)
             {
-                fixed(AVFrame** ptr = &swsFrame) av_frame_free(ptr);
+                fixed (AVFrame** ptr = &swsFrame) av_frame_free(ptr);
                 swsFrame = null;
             }
-            
+
             Log.Error($"Failed to allocate SwsContext");
 
             return false;
         }
 
-        FillPlanes  = VideoDecoder.VideoAccelerated ? SwsHWFillPlanes : SwsSWFillPlanes;
-        psCase      = PSCase.SwsScale;
+        FillPlanes = VideoDecoder.VideoAccelerated ? SwsHWFillPlanes : SwsSWFillPlanes;
+        psCase = PSCase.SwsScale;
 
-        txtDesc[0].Width   = (uint)swsFrame->width;
-        txtDesc[0].Height  = (uint)swsFrame->height;
-        txtDesc[0].Format  = srvDesc[0].Format = Format.R8G8B8A8_UNorm;
+        txtDesc[0].Width = (uint)swsFrame->width;
+        txtDesc[0].Height = (uint)swsFrame->height;
+        txtDesc[0].Format = srvDesc[0].Format = Format.R8G8B8A8_UNorm;
         srvDesc[0].ViewDimension = ShaderResourceViewDimension.Texture2D;
 
         if (VideoProcessor == VideoProcessors.D3D11)
@@ -96,7 +95,7 @@ Texture1.Sample(Sampler, float2(input.Texture.x, 0.5 + (input.Texture.y / 2))).r
                     break;
             }
         }
-        
+
         return true;
     }
 
@@ -112,14 +111,14 @@ Texture1.Sample(Sampler, float2(input.Texture.x, 0.5 + (input.Texture.y / 2))).r
 
         VideoFrame mFrame = new()
         {
-            AVFrame     = hwframe,
-            Timestamp   = (long)(hwframe->pts * scfg.Timebase) - VideoDecoder.Demuxer.StartTime
+            AVFrame = hwframe,
+            Timestamp = (long)(hwframe->pts * scfg.Timebase) - VideoDecoder.Demuxer.StartTime
         };
 
-        var frame   = av_frame_alloc();
-        int ret     = av_hwframe_transfer_data(frame, hwframe, 0);
-        ret         = av_frame_copy_props(frame, hwframe);
-        hwframe     = av_frame_alloc();
+        var frame = av_frame_alloc();
+        int ret = av_hwframe_transfer_data(frame, hwframe, 0);
+        ret = av_frame_copy_props(frame, hwframe);
+        hwframe = av_frame_alloc();
 
         SwsFillPlanesHelper(mFrame, frame);
         av_frame_free(&frame);
@@ -129,7 +128,7 @@ Texture1.Sample(Sampler, float2(input.Texture.x, 0.5 + (input.Texture.y / 2))).r
     {
         VideoFrame mFrame = new()
         {
-            Timestamp   = (long)(frame->pts * scfg.Timebase) - VideoDecoder.Demuxer.StartTime
+            Timestamp = (long)(frame->pts * scfg.Timebase) - VideoDecoder.Demuxer.StartTime
         };
 
         SwsFillPlanesHelper(mFrame, frame);
@@ -139,18 +138,18 @@ Texture1.Sample(Sampler, float2(input.Texture.x, 0.5 + (input.Texture.y / 2))).r
     VideoFrame SwsFillPlanesHelper(VideoFrame mFrame, AVFrame* frame)
     {
         int ret = sws_scale(swsCtx,
-            frame->data.        ToRawArray(),
-            frame->linesize.    ToArray(),
+            frame->data.ToRawArray(),
+            frame->linesize.ToArray(),
             0,
             swsFrame->height,
-            swsFrame->data.     ToRawArray(),
-            swsFrame->linesize. ToArray());
+            swsFrame->data.ToRawArray(),
+            swsFrame->linesize.ToArray());
 
-        subData[0].DataPointer  = swsFrame->data[0];
-        subData[0].RowPitch     = (uint)swsFrame->linesize[0];
+        subData[0].DataPointer = swsFrame->data[0];
+        subData[0].RowPitch = (uint)swsFrame->linesize[0];
 
-        mFrame.Texture  = [device.CreateTexture2D(txtDesc[0], subData)];
-        mFrame.SRV      = [device.CreateShaderResourceView(mFrame.Texture[0], srvDesc[0])];
+        mFrame.Texture = [device.CreateTexture2D(txtDesc[0], subData)];
+        mFrame.SRV = [device.CreateShaderResourceView(mFrame.Texture[0], srvDesc[0])];
 
         return mFrame;
     }

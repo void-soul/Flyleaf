@@ -13,45 +13,43 @@
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.Mathematics;
-
-using ID3D11DeviceContext   = Vortice.Direct3D11.ID3D11DeviceContext;
-
 using static FlyleafLib.MediaFramework.MediaRenderer.Renderer;
+using ID3D11DeviceContext = Vortice.Direct3D11.ID3D11DeviceContext;
 
 namespace FlyleafLib.MediaFramework.MediaRenderer;
 
 class ChildRenderer : IVP
 {
-    public VPConfig             Config          => ucfg;
+    public VPConfig Config => ucfg;
     readonly VPConfig ucfg;
-    public Renderer             Renderer        { get; private set; }
-    public SwapChain            SwapChain       { get; private set; }
-    public Viewport             Viewport        { get; private set; }
-    public int                  ControlWidth    { get; private set; }
-    public int                  ControlHeight   { get; private set; }
-    public int                  SideXPixels     => sideXPixels;
-    public int                  SideYPixels     => sideYPixels;
-    readonly int                         sideXPixels, sideYPixels;
+    public Renderer Renderer { get; private set; }
+    public SwapChain SwapChain { get; private set; }
+    public Viewport Viewport { get; private set; }
+    public int ControlWidth { get; private set; }
+    public int ControlHeight { get; private set; }
+    public int SideXPixels => sideXPixels;
+    public int SideYPixels => sideYPixels;
+    readonly int sideXPixels, sideYPixels;
 
-    readonly ID3D11DeviceContext     context;
-    readonly ID3D11Buffer            vsBuffer;
-    VSBufferType            vsData    = new();
+    readonly ID3D11DeviceContext context;
+    readonly ID3D11Buffer vsBuffer;
+    VSBufferType vsData = new();
     private VPRequestType vpRequestsIn;
     private readonly VPRequestType vpRequests;
 
     public ChildRenderer(VPConfig config)
     {
-        ucfg        = config;
-        context     = Renderer.Device.CreateDeferredContext();
-        vsBuffer    = Renderer.Device.CreateBuffer(vsDesc);
-        
-        context.IASetVertexBuffer       (0, Renderer.vertexBuffer, sizeof(float) * 5);
-        context.IASetInputLayout        (Renderer.inputLayout);
-        context.IASetPrimitiveTopology  (PrimitiveTopology.TriangleList);
-        context.VSSetConstantBuffer     (0, vsBuffer);
-        context.VSSetShader             (Renderer.vsMain);
-        context.PSSetSampler            (0, Renderer.samplerLinear);
-        context.PSSetShader             (Renderer.psShader["rgba"]);
+        ucfg = config;
+        context = Renderer.Device.CreateDeferredContext();
+        vsBuffer = Renderer.Device.CreateBuffer(vsDesc);
+
+        context.IASetVertexBuffer(0, Renderer.vertexBuffer, sizeof(float) * 5);
+        context.IASetInputLayout(Renderer.inputLayout);
+        context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        context.VSSetConstantBuffer(0, vsBuffer);
+        context.VSSetShader(Renderer.vsMain);
+        context.PSSetSampler(0, Renderer.samplerLinear);
+        context.PSSetShader(Renderer.psShader["rgba"]);
     }
 
     void IVP.VPRequest(VPRequestType request)
@@ -66,8 +64,8 @@ class ChildRenderer : IVP
     void IVP.MonitorChanged(GPUOutput monitor) { }
     void IVP.UpdateSize(int width, int height)
     {   // TBR
-        ControlWidth    = width;
-        ControlHeight   = height;
+        ControlWidth = width;
+        ControlHeight = height;
     }
 
     void Dispose()

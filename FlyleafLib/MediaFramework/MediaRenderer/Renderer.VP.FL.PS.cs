@@ -1,10 +1,8 @@
-﻿using Vortice.Direct3D;
+﻿using FlyleafLib.MediaFramework.MediaDecoder;
+using FlyleafLib.MediaFramework.MediaFrame;
+using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
-
-using FlyleafLib.MediaFramework.MediaDecoder;
-using FlyleafLib.MediaFramework.MediaFrame;
-
 using ID3D11Texture2D = Vortice.Direct3D11.ID3D11Texture2D;
 
 namespace FlyleafLib.MediaFramework.MediaRenderer;
@@ -14,13 +12,13 @@ public unsafe partial class Renderer
     static readonly string[] pixelOffsets = ["r", "g", "b", "a"];
 
     // TODO: PSCase flags / enum?*
-    const string dYUVLimited    = "dYUVLimited";
-    const string dYUVFull       = "dYUVFull";
-    const string dBT2020        = "dBT2020";
-    const string dPQToLinear    = "dPQToLinear";
-    const string dHLGToLinear   = "dHLGToLinear";
-    const string dTone          = "dTone";
-    const string dFilters       = "dFilters";
+    const string dYUVLimited = "dYUVLimited";
+    const string dYUVFull = "dYUVFull";
+    const string dBT2020 = "dBT2020";
+    const string dPQToLinear = "dPQToLinear";
+    const string dHLGToLinear = "dHLGToLinear";
+    const string dTone = "dTone";
+    const string dFilters = "dFilters";
     List<string> defines = [];
 
     static ReadOnlySpan<char> HWSAMPLE => @"
@@ -29,17 +27,17 @@ color = float4(
     Texture2.Sample(Sampler, input.Texture).rg,
     1.0f);
 ";
-    readonly Texture2DDescription[]          txtDesc     = new Texture2DDescription[4];              // SW Textures (TODO: Array)
-    readonly ShaderResourceViewDescription[] srvDesc     = new ShaderResourceViewDescription[4];     // SW / HW SRV Desc
-    readonly SubresourceData[]               subData     = new SubresourceData[1];                   // SW -> HW DataPointer / RowPitch
+    readonly Texture2DDescription[] txtDesc = new Texture2DDescription[4];              // SW Textures (TODO: Array)
+    readonly ShaderResourceViewDescription[] srvDesc = new ShaderResourceViewDescription[4];     // SW / HW SRV Desc
+    readonly SubresourceData[] subData = new SubresourceData[1];                   // SW -> HW DataPointer / RowPitch
 
-    PSCase  psCase;
-    string  psId, psIdPrev;
+    PSCase psCase;
+    string psId, psIdPrev;
 
     bool FLSwsConfig()
     {
-        psCase  = PSCase.None;
-        psId    = "";
+        psCase = PSCase.None;
+        psId = "";
         defines = [];
 
         if (ucfg.Pano360._enabled)
@@ -108,7 +106,7 @@ color = float4(
         FillPlanes = FLHWFillPlanes;
 
         psCase = PSCase.HW;
-        psId  += "1";
+        psId += "1";
 
         if (scfg.ColorRange == ColorRange.Limited)
             defines.Add(dYUVLimited);
@@ -153,7 +151,7 @@ Texture2.Sample(Sampler, float2(0.5 + (input.Texture.x / 2), input.Texture.y)).r
 SampleSplitFrameAlpha("input.Texture.x / 2", "input.Texture.y"), defines);
                 break;
 
-                case SplitFrameAlphaPosition.Right:
+            case SplitFrameAlphaPosition.Right:
                 psId += "r";
                 SetPS(psId, @"
 color.rgb = float3(
@@ -162,7 +160,7 @@ Texture2.Sample(Sampler, float2(input.Texture.x / 2, input.Texture.y)).rg);" +
 SampleSplitFrameAlpha("0.5 + (input.Texture.x / 2)", "input.Texture.y"), defines);
                 break;
 
-                case SplitFrameAlphaPosition.Top:
+            case SplitFrameAlphaPosition.Top:
                 psId += "t";
                 SetPS(psId, @"
 color.rgb = float3(
@@ -171,7 +169,7 @@ Texture2.Sample(Sampler, float2(input.Texture.x, 0.5 + (input.Texture.y / 2))).r
 SampleSplitFrameAlpha("input.Texture.x", "input.Texture.y / 2"), defines);
                 break;
 
-                case SplitFrameAlphaPosition.Bottom:
+            case SplitFrameAlphaPosition.Bottom:
                 psId += "b";
                 SetPS(psId, @"
 color.rgb = float3(
@@ -219,28 +217,28 @@ SampleSplitFrameAlpha("input.Texture.x", "0.5 + (input.Texture.y / 2)"), defines
             psData.CoeffsIndex = 2;
 
         if (scfg.PixelPlanes == 1 && ( // No Alpha
-            scfg.PixelFormat == AVPixelFormat.Y210le  || // Not tested
+            scfg.PixelFormat == AVPixelFormat.Y210le || // Not tested
             scfg.PixelFormat == AVPixelFormat.Yuyv422 ||
             scfg.PixelFormat == AVPixelFormat.Yvyu422 ||
-            scfg.PixelFormat == AVPixelFormat.Uyvy422 ))
+            scfg.PixelFormat == AVPixelFormat.Uyvy422))
         {
-            psCase  = PSCase.YUVPacked;
-            psId   += ((int)psCase).ToString();
+            psCase = PSCase.YUVPacked;
+            psId += ((int)psCase).ToString();
 
             psData.UVOffset = 1.0f / (scfg.txtWidth >> 1);
-            txtDesc[0].Width   = scfg.txtWidth;
-            txtDesc[0].Height  = scfg.txtHeight;
+            txtDesc[0].Width = scfg.txtWidth;
+            txtDesc[0].Height = scfg.txtHeight;
 
             if (scfg.PixelComp0Depth > 8)
             {
                 psId += "x";
-                txtDesc[0].Format   = Format.Y210;
-                srvDesc[0].Format   = Format.R16G16B16A16_UNorm;
+                txtDesc[0].Format = Format.Y210;
+                srvDesc[0].Format = Format.R16G16B16A16_UNorm;
             }
             else
             {
-                txtDesc[0].Format   = Format.YUY2;
-                srvDesc[0].Format   = Format.R8G8B8A8_UNorm;
+                txtDesc[0].Format = Format.YUY2;
+                srvDesc[0].Format = Format.R8G8B8A8_UNorm;
             }
 
             string header = @"
@@ -295,13 +293,13 @@ color = float4(outY, outUV, 1.0f);
         // This covers all planes == 2 YUV (Semi-Planar)
         else if (scfg.PixelPlanes == 2) // No Alpha
         {
-            psCase  = PSCase.YUVSemiPlanar;
-            psId   += ((int)psCase).ToString();
+            psCase = PSCase.YUVSemiPlanar;
+            psId += ((int)psCase).ToString();
 
-            txtDesc[0].Width    = scfg.txtWidth;
-            txtDesc[0].Height   = scfg.txtHeight;
-            txtDesc[1].Width    = scfg.txtWidth  >> scfg.PixelFormatDesc->log2_chroma_w;
-            txtDesc[1].Height   = scfg.txtHeight >> scfg.PixelFormatDesc->log2_chroma_h;
+            txtDesc[0].Width = scfg.txtWidth;
+            txtDesc[0].Height = scfg.txtHeight;
+            txtDesc[1].Width = scfg.txtWidth >> scfg.PixelFormatDesc->log2_chroma_w;
+            txtDesc[1].Height = scfg.txtHeight >> scfg.PixelFormatDesc->log2_chroma_h;
 
             string offsets = scfg.PixelComps[1].offset > scfg.PixelComps[2].offset ? "gr" : "rg";
             psId += offsets;
@@ -367,13 +365,13 @@ SampleSplitFrameAlpha("input.Texture.x", "0.5 + (input.Texture.y / 2)"), defines
         // Y_U_V
         else if (scfg.PixelPlanes > 2) // Possible Alpha
         {
-            psCase  = PSCase.YUVPlanar;
-            psId   += ((int)psCase).ToString();
+            psCase = PSCase.YUVPlanar;
+            psId += ((int)psCase).ToString();
 
-            txtDesc[0].Width    = txtDesc[3].Width = scfg.txtWidth;
-            txtDesc[0].Height   = txtDesc[3].Height= scfg.txtHeight;
-            txtDesc[1].Width    = txtDesc[2].Width = scfg.txtWidth  >> scfg.PixelFormatDesc->log2_chroma_w;
-            txtDesc[1].Height   = txtDesc[2].Height= scfg.txtHeight >> scfg.PixelFormatDesc->log2_chroma_h;
+            txtDesc[0].Width = txtDesc[3].Width = scfg.txtWidth;
+            txtDesc[0].Height = txtDesc[3].Height = scfg.txtHeight;
+            txtDesc[1].Width = txtDesc[2].Width = scfg.txtWidth >> scfg.PixelFormatDesc->log2_chroma_w;
+            txtDesc[1].Height = txtDesc[2].Height = scfg.txtHeight >> scfg.PixelFormatDesc->log2_chroma_h;
 
             string shader = @"
 color.r = Texture1.Sample(Sampler, input.Texture).r;
@@ -391,8 +389,8 @@ color.a = Texture4.Sample(Sampler, input.Texture).r;
 ";
             }
 
-            Format  curFormat = Format.R8_UNorm;
-            int     maxBits   = 8;
+            Format curFormat = Format.R8_UNorm;
+            int maxBits = 8;
             if (scfg.PixelComp0Depth > 8)
             {
                 psId += "a";
@@ -471,24 +469,24 @@ SampleSplitFrameAlpha("input.Texture.x", "0.5 + (input.Texture.y / 2)");
     {
         // [RGB0]32 | [RGBA]32 | [RGBA]64
         if (scfg.PixelPlanes == 1 && ( // Possible Alpha
-            scfg.PixelFormat == AVPixelFormat._0RGB  ||
-            scfg.PixelFormat == AVPixelFormat.Rgb0   ||
-            scfg.PixelFormat == AVPixelFormat._0BGR  ||
-            scfg.PixelFormat == AVPixelFormat.Bgr0   ||
+            scfg.PixelFormat == AVPixelFormat._0RGB ||
+            scfg.PixelFormat == AVPixelFormat.Rgb0 ||
+            scfg.PixelFormat == AVPixelFormat._0BGR ||
+            scfg.PixelFormat == AVPixelFormat.Bgr0 ||
 
-            scfg.PixelFormat == AVPixelFormat.Argb   ||
-            scfg.PixelFormat == AVPixelFormat.Rgba   ||
-            scfg.PixelFormat == AVPixelFormat.Abgr   ||
-            scfg.PixelFormat == AVPixelFormat.Bgra   ||
+            scfg.PixelFormat == AVPixelFormat.Argb ||
+            scfg.PixelFormat == AVPixelFormat.Rgba ||
+            scfg.PixelFormat == AVPixelFormat.Abgr ||
+            scfg.PixelFormat == AVPixelFormat.Bgra ||
 
-            scfg.PixelFormat == AVPixelFormat.Rgba64le||
+            scfg.PixelFormat == AVPixelFormat.Rgba64le ||
             scfg.PixelFormat == AVPixelFormat.Bgra64le))
         {
-            psCase  = PSCase.RGBPacked;
-            psId   += ((int)psCase).ToString();
+            psCase = PSCase.RGBPacked;
+            psId += ((int)psCase).ToString();
 
-            txtDesc[0].Width   = scfg.txtWidth;
-            txtDesc[0].Height  = scfg.txtHeight;
+            txtDesc[0].Width = scfg.txtWidth;
+            txtDesc[0].Height = scfg.txtHeight;
 
             if (scfg.PixelComp0Depth > 8)
             {
@@ -500,7 +498,7 @@ SampleSplitFrameAlpha("input.Texture.x", "0.5 + (input.Texture.y / 2)");
 
             string offsets = "";
             for (int i = 0; i < scfg.PixelComps.Length; i++)
-                offsets += pixelOffsets[(int) (scfg.PixelComps[i].offset / Math.Ceiling(scfg.PixelComp0Depth / 8.0))];
+                offsets += pixelOffsets[(int)(scfg.PixelComps[i].offset / Math.Ceiling(scfg.PixelComp0Depth / 8.0))];
 
             // TBR: [RGB0]32 has no alpha remove it
             if (scfg.PixelFormatStr[0] == '0')
@@ -533,15 +531,15 @@ color.rgb = (color.rgb - rgbOffset) * rgbScale;
 
         // [BGR/RGB]16
         else if (scfg.PixelPlanes == 1 && (
-            scfg.PixelFormat == AVPixelFormat.Rgb444le||
+            scfg.PixelFormat == AVPixelFormat.Rgb444le ||
             scfg.PixelFormat == AVPixelFormat.Bgr444le))
         {
-            psCase  = PSCase.RGBPacked2;
-            psId   += ((int)psCase).ToString();
+            psCase = PSCase.RGBPacked2;
+            psId += ((int)psCase).ToString();
 
-            txtDesc[0].Width    = scfg.txtWidth;
-            txtDesc[0].Height   = scfg.txtHeight;
-            txtDesc[0].Format   = srvDesc[0].Format = Format.B4G4R4A4_UNorm;
+            txtDesc[0].Width = scfg.txtWidth;
+            txtDesc[0].Height = scfg.txtHeight;
+            txtDesc[0].Format = srvDesc[0].Format = Format.B4G4R4A4_UNorm;
 
             string shader;
             if (scfg.PixelFormat == AVPixelFormat.Rgb444le)
@@ -570,13 +568,13 @@ color.rgb = (color.rgb - rgbOffset) * rgbScale;
         // GBR(A)
         else if (scfg.PixelPlanes > 2) // Possible Alpha | TBR: Usually transfer func 'Linear' for > 8-bit which requires pow (*?)
         {
-            psCase  = PSCase.RGBPlanar;
-            psId   += ((int)psCase).ToString();
+            psCase = PSCase.RGBPlanar;
+            psId += ((int)psCase).ToString();
 
             for (int i = 0; i < scfg.PixelPlanes; i++)
             {
-                txtDesc[i].Width    = scfg.txtWidth;
-                txtDesc[i].Height   = scfg.txtHeight;
+                txtDesc[i].Width = scfg.txtWidth;
+                txtDesc[i].Height = scfg.txtHeight;
             }
 
             string shader = @"
@@ -598,19 +596,19 @@ color.a = Texture4.Sample(Sampler, input.Texture).r;
                 * Mainly affects gbrp10 (should prefer Texture2D<float> for more accurate and better performance)
                 */
 
-            Format  curFormat = Format.R8_UNorm;
-            int     maxBits   = 8;
+            Format curFormat = Format.R8_UNorm;
+            int maxBits = 8;
             if (scfg.PixelComp0Depth > 16)
             {
                 psId += "a";
-                curFormat   = Format.R32_Float;
-                maxBits     = 32;
+                curFormat = Format.R32_Float;
+                maxBits = 32;
             }
             else if (scfg.PixelComp0Depth > 8)
             {
                 psId += "b";
-                curFormat   = Format.R16_UNorm;
-                maxBits     = 16;
+                curFormat = Format.R16_UNorm;
+                maxBits = 16;
             }
 
             for (int i = 0; i < scfg.PixelPlanes; i++)
@@ -645,11 +643,11 @@ color.a = 1.0f;
     bool FLSWGrayConfig()
     {
         // Gray (Single Plane)
-        psCase  = PSCase.Gray;
-        psId   += ((int)psCase).ToString();
+        psCase = PSCase.Gray;
+        psId += ((int)psCase).ToString();
 
-        txtDesc[0].Width    = scfg.txtWidth;
-        txtDesc[0].Height   = scfg.txtHeight;
+        txtDesc[0].Width = scfg.txtWidth;
+        txtDesc[0].Height = scfg.txtHeight;
 
         string shader = @"
 color = float4(Texture1.Sample(Sampler, input.Texture).r, Texture1.Sample(Sampler, input.Texture).r, Texture1.Sample(Sampler, input.Texture).r, 1.0f);
@@ -707,9 +705,9 @@ color.a = YUVToRGBFull(float3(Texture1.Sample(Sampler, float2({x}, {y})).r, floa
 
         VideoFrame mFrame = new()
         {
-            AVFrame     = frame,
-            Timestamp   = (long)(frame->pts * scfg.Timebase) - VideoDecoder.Demuxer.StartTime,
-            SRV         = [
+            AVFrame = frame,
+            Timestamp = (long)(frame->pts * scfg.Timebase) - VideoDecoder.Demuxer.StartTime,
+            SRV = [
                 device.CreateShaderResourceView(ffTexture, srvDesc[0]),
                 device.CreateShaderResourceView(ffTexture, srvDesc[1])],
         };
@@ -721,15 +719,15 @@ color.a = YUVToRGBFull(float3(Texture1.Sample(Sampler, float2({x}, {y})).r, floa
     {
         VideoFrame mFrame = new()
         {
-            Timestamp   = (long)(frame->pts * scfg.Timebase) - VideoDecoder.Demuxer.StartTime,
-            Texture     = new ID3D11Texture2D            [scfg.PixelPlanes],
-            SRV         = new ID3D11ShaderResourceView   [scfg.PixelPlanes]
+            Timestamp = (long)(frame->pts * scfg.Timebase) - VideoDecoder.Demuxer.StartTime,
+            Texture = new ID3D11Texture2D[scfg.PixelPlanes],
+            SRV = new ID3D11ShaderResourceView[scfg.PixelPlanes]
         };
 
         for (int i = 0; i < scfg.PixelPlanes; i++)
         {
-            subData[0].RowPitch     = (uint)frame->linesize[i];
-            subData[0].DataPointer  = frame->data[i];
+            subData[0].RowPitch = (uint)frame->linesize[i];
+            subData[0].DataPointer = frame->data[i];
 
             if (subData[0].RowPitch < txtDesc[i].Width)
             {   // Prevent reading more than the actual data (Access Violation #424)
@@ -738,8 +736,8 @@ color.a = YUVToRGBFull(float3(Texture1.Sample(Sampler, float2({x}, {y})).r, floa
                 return null;
             }
 
-            mFrame.Texture[i]  = device.CreateTexture2D         (txtDesc[i],        subData);
-            mFrame.SRV[i]      = device.CreateShaderResourceView(mFrame.Texture[i], srvDesc[i]);
+            mFrame.Texture[i] = device.CreateTexture2D(txtDesc[i], subData);
+            mFrame.SRV[i] = device.CreateShaderResourceView(mFrame.Texture[i], srvDesc[i]);
         }
 
         av_frame_unref(frame);
@@ -749,15 +747,15 @@ color.a = YUVToRGBFull(float3(Texture1.Sample(Sampler, float2({x}, {y})).r, floa
     {   // Negative linesize needs vertical flipping | [Bottom -> Top] data[i] points to last row and we need to move at first (height - 1) rows
         VideoFrame mFrame = new()
         {
-            Timestamp   = (long)(frame->pts * scfg.Timebase) - VideoDecoder.Demuxer.StartTime,
-            Texture     = new ID3D11Texture2D            [scfg.PixelPlanes],
-            SRV         = new ID3D11ShaderResourceView   [scfg.PixelPlanes]
+            Timestamp = (long)(frame->pts * scfg.Timebase) - VideoDecoder.Demuxer.StartTime,
+            Texture = new ID3D11Texture2D[scfg.PixelPlanes],
+            SRV = new ID3D11ShaderResourceView[scfg.PixelPlanes]
         };
 
         for (int i = 0; i < scfg.PixelPlanes; i++)
         {
-            subData[0].RowPitch     = (uint)(-1 * frame->linesize[i]);
-            subData[0].DataPointer  = frame->data[i] + (frame->linesize[i] * (frame->height - 1));
+            subData[0].RowPitch = (uint)(-1 * frame->linesize[i]);
+            subData[0].DataPointer = frame->data[i] + (frame->linesize[i] * (frame->height - 1));
 
             if (subData[0].RowPitch < txtDesc[i].Width)
             {   // Prevent reading more than the actual data (Access Violation #424)
@@ -766,8 +764,8 @@ color.a = YUVToRGBFull(float3(Texture1.Sample(Sampler, float2({x}, {y})).r, floa
                 return null;
             }
 
-            mFrame.Texture[i]  = device.CreateTexture2D         (txtDesc[i],        subData);
-            mFrame.SRV[i]      = device.CreateShaderResourceView(mFrame.Texture[i], srvDesc[i]);
+            mFrame.Texture[i] = device.CreateTexture2D(txtDesc[i], subData);
+            mFrame.SRV[i] = device.CreateShaderResourceView(mFrame.Texture[i], srvDesc[i]);
         }
 
         av_frame_unref(frame);
@@ -799,7 +797,7 @@ enum PSCase : int
     HW,
     HWD3,
     SWD3,
-        
+
     Gray,
     RGBPacked,
     RGBPacked2,

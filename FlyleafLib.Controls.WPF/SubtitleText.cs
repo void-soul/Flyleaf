@@ -1,10 +1,10 @@
 ﻿using System;
 using System.ComponentModel;
 using System.Globalization;
+using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media;
-using System.Windows;
 
 namespace FlyleafLib.Controls.WPF
 {
@@ -220,10 +220,10 @@ namespace FlyleafLib.Controls.WPF
         {
             _Pen = new Pen(Stroke, StrokeThickness)
             {
-                DashCap     = PenLineCap.Round,
-                EndLineCap  = PenLineCap.Round,
-                LineJoin    = PenLineJoin.Round,
-                StartLineCap= PenLineCap.Round
+                DashCap = PenLineCap.Round,
+                EndLineCap = PenLineCap.Round,
+                LineJoin = PenLineJoin.Round,
+                StartLineCap = PenLineCap.Round
             };
 
             if (StrokePosition == StrokePosition.Outside || StrokePosition == StrokePosition.Inside)
@@ -274,7 +274,7 @@ namespace FlyleafLib.Controls.WPF
             // the Math.Min call is important - without this constraint (which seems arbitrary, but is the maximum allowable text width), things blow up when availableSize is infinite in both directions
             // the Math.Max call is to ensure we don't hit zero, which will cause MaxTextHeight to throw
             _FormattedText.MaxTextWidth = Math.Min(3579139, w);
-            _FormattedText.MaxTextHeight= Math.Max(0.0001d, h);
+            _FormattedText.MaxTextHeight = Math.Max(0.0001d, h);
 
             // return the desired size
             return new Size(Math.Ceiling(_FormattedText.Width), Math.Ceiling(_FormattedText.Height));

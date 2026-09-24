@@ -1,8 +1,7 @@
-﻿using System.Windows;
+﻿using FlyleafLib.MediaPlayer;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-
-using FlyleafLib.MediaPlayer;
 
 namespace FlyleafLib.Controls.WPF;
 

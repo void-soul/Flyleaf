@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using MaterialDesignThemes.Wpf;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
@@ -8,8 +9,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-
-using MaterialDesignThemes.Wpf;
 
 namespace FlyleafLib.Controls.WPF;
 
@@ -49,7 +48,7 @@ public partial class Settings : UserControl, INotifyPropertyChanged
     {
         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
         {
-            Visual visual  = (Visual)VisualTreeHelper.GetChild(parent, i);
+            Visual visual = (Visual)VisualTreeHelper.GetChild(parent, i);
 
             if (visual == null) break;
             if (visual is FrameworkElement)
@@ -98,10 +97,10 @@ public partial class Settings : UserControl, INotifyPropertyChanged
             .Where(prop => typeof(Color).IsAssignableFrom(prop.PropertyType))
             .Select(prop => new KeyValuePair<string, Color>(prop.Name, (Color)prop.GetValue(null)));
 
-    private void ValidationHex              (object sender, TextCompositionEventArgs e) => e.Handled = !RegHex().IsMatch(e.Text);
-    private void ValidationNumericPositive  (object sender, TextCompositionEventArgs e) => e.Handled = !RegNumPositive().IsMatch(e.Text);
-    private void ValidationNumeric          (object sender, TextCompositionEventArgs e) => e.Handled = !RegNum().IsMatch(e.Text);
-    private void ValidationRatio            (object sender, TextCompositionEventArgs e) => e.Handled = !RegRatio().IsMatch(e.Text);
+    private void ValidationHex(object sender, TextCompositionEventArgs e) => e.Handled = !RegHex().IsMatch(e.Text);
+    private void ValidationNumericPositive(object sender, TextCompositionEventArgs e) => e.Handled = !RegNumPositive().IsMatch(e.Text);
+    private void ValidationNumeric(object sender, TextCompositionEventArgs e) => e.Handled = !RegNum().IsMatch(e.Text);
+    private void ValidationRatio(object sender, TextCompositionEventArgs e) => e.Handled = !RegRatio().IsMatch(e.Text);
 
     [GeneratedRegex(@"^[0-9a-f]+$", RegexOptions.IgnoreCase, "en-150")]
     private static partial Regex RegHex();

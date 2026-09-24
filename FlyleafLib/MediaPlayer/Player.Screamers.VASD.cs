@@ -1,6 +1,5 @@
-﻿using Vortice.Direct3D11;
-
-using FlyleafLib.MediaFramework.MediaDecoder;
+﻿using FlyleafLib.MediaFramework.MediaDecoder;
+using Vortice.Direct3D11;
 
 namespace FlyleafLib.MediaPlayer;
 
@@ -18,12 +17,12 @@ unsafe partial class Player
          *  we currently use isOpened only (as two statuses)
          */
 
-        bool gotAudio       = !Audio.IsOpened || Config.Player.MaxLatency != 0;
-        bool gotVideo       = false;
-        bool shouldStop     = false;
-        bool showOneFrame   = true;
-        int  audioRetries   = 4;
-        int  loops          = 0;
+        bool gotAudio = !Audio.IsOpened || Config.Player.MaxLatency != 0;
+        bool gotVideo = false;
+        bool shouldStop = false;
+        bool showOneFrame = true;
+        int audioRetries = 4;
+        int loops = 0;
 
         if (CanTrace) Log.Trace("Buffering");
 
@@ -46,13 +45,13 @@ unsafe partial class Player
         if (Subtitles.isOpened && Config.Subtitles.Enabled)
         {
             lock (lockSubtitles)
-            if (SubtitlesDecoder.OnVideoDemuxer)
-                SubtitlesDecoder.Start();
-            else if (!decoder.RequiresResync)
-            {
-                SubtitlesDemuxer.Start();
-                SubtitlesDecoder.Start();
-            }
+                if (SubtitlesDecoder.OnVideoDemuxer)
+                    SubtitlesDecoder.Start();
+                else if (!decoder.RequiresResync)
+                {
+                    SubtitlesDemuxer.Start();
+                    SubtitlesDecoder.Start();
+                }
         }
 
         if (Data.isOpened && Config.Data.Enabled)
@@ -140,7 +139,7 @@ unsafe partial class Player
                 if (!VideoDecoder.IsRunning && !isVideoSwitch)
                 {
                     Log.Warn("Video Exhausted");
-                    shouldStop= true;
+                    shouldStop = true;
                 }
 
                 if (gotVideo && !gotAudio && audioRetries > 0 && (!AudioDecoder.IsRunning || AudioDecoder.Demuxer.Status == MediaFramework.Status.QueueFull))
@@ -150,7 +149,7 @@ unsafe partial class Player
                     audioRetries--;
 
                     if (audioRetries < 1)
-                        gotAudio  = true;
+                        gotAudio = true;
                 }
             }
 
@@ -204,7 +203,7 @@ unsafe partial class Player
         int vDistanceMs, sDistanceMs, dDistanceMs;
         long elapsedTicks;
         bool refreshed = false;
-        
+
         while (status == Status.Playing)
         {
             // Seeks and then requiresBuffering | TBR: missing SeekCompleted callback?
@@ -239,8 +238,8 @@ unsafe partial class Player
 
                 if (Config.Player.Stats && framesDisplayedDwmEnd > 0)
                 {
-                    framesDisplayedDwmEnd   = Renderer.SwapChain.GetFrameStatistics().PresentCount - framesDisplayedDwmStart;
-                    framesDisplayedDwm     += framesDisplayedDwmEnd;
+                    framesDisplayedDwmEnd = Renderer.SwapChain.GetFrameStatistics().PresentCount - framesDisplayedDwmStart;
+                    framesDisplayedDwm += framesDisplayedDwmEnd;
                 }
 
                 if (VideoDemuxer.Interrupter.Timedout)
@@ -251,7 +250,7 @@ unsafe partial class Player
                 OnBufferingStarted();
                 StopScreamerVASDAudio();
                 BufferVASD();
-                
+
                 if (!seeks.IsEmpty)
                     continue;
 
@@ -326,14 +325,14 @@ unsafe partial class Player
 
             // Valid for Present | -3 to 2 (5ms breath)
             elapsedTicks = (long)(sw.ElapsedTicks * SWFREQ_TO_TICKS);
-            vDistanceMs  = (int) ((((vFrame.Timestamp - startTicks) / speed) - elapsedTicks) / 10000);
+            vDistanceMs = (int)((((vFrame.Timestamp - startTicks) / speed) - elapsedTicks) / 10000);
 
             // CPU Drops to avoid dropping in GPU and also losing sync
             if (vDistanceMs < -3)
             {
                 if (CanDebug) Log.Debug($"[V] Frame Dropped ({vDistanceMs})");
 
-                vFrame      = null; // don't dispose (LastFrame)
+                vFrame = null; // don't dispose (LastFrame)
                 secondField = false;
                 framesFailed++;
 
@@ -352,11 +351,11 @@ unsafe partial class Player
                     if (vFrame == null)
                         break;
 
-                    if ((int) ((((vFrame.Timestamp - startTicks) / speed) - (long) (sw.ElapsedTicks * SWFREQ_TO_TICKS)) / 10_000) >= 0)
+                    if ((int)((((vFrame.Timestamp - startTicks) / speed) - (long)(sw.ElapsedTicks * SWFREQ_TO_TICKS)) / 10_000) >= 0)
                         break; // found
 
                     framesFailed++;
-                    if (CanDebug) Log.Debug($"[V] Frame Dropped ({(int) ((((vFrame.Timestamp - startTicks) / speed) - (long) (sw.ElapsedTicks * SWFREQ_TO_TICKS)) / 10_000)}:M)");
+                    if (CanDebug) Log.Debug($"[V] Frame Dropped ({(int)((((vFrame.Timestamp - startTicks) / speed) - (long)(sw.ElapsedTicks * SWFREQ_TO_TICKS)) / 10_000)}:M)");
                     vFrame = null;
                 } while (true);
 
@@ -392,7 +391,7 @@ unsafe partial class Player
                         framesDisplayed++;
                         refreshed = true;
                     }
-                    
+
                     // Sleep 10ms and recalculate distance
                     else
                         Thread.Sleep(10);
@@ -434,9 +433,9 @@ unsafe partial class Player
             }
             else
             {
-                vFrame          = null; // don't dispose (LastFrame)
-                secondField     = false;
-                dequeueRetries  = MAX_DEQUEUE_RETRIES;
+                vFrame = null; // don't dispose (LastFrame)
+                secondField = false;
+                dequeueRetries = MAX_DEQUEUE_RETRIES;
                 while (!isVideoSwitch && !vFrames.TryDequeue(out vFrame) && dequeueRetries-- > 0)
                     Thread.Sleep(1);
 
@@ -501,7 +500,7 @@ unsafe partial class Player
                     }
                 }
             }
-            
+
             if (Data.isOpened)
             {
                 elapsedTicks = (long)(sw.ElapsedTicks * SWFREQ_TO_TICKS);
@@ -542,13 +541,13 @@ unsafe partial class Player
         if (Config.Player.Stats)
         {
             Thread.Sleep(15); // wait for last present
-            framesDisplayedDwmEnd   = SafeSubstract(Renderer.SwapChain.GetFrameStatistics().PresentCount, framesDisplayedDwmStart);
-            framesDisplayedDwm     += framesDisplayedDwmEnd;
+            framesDisplayedDwmEnd = SafeSubstract(Renderer.SwapChain.GetFrameStatistics().PresentCount, framesDisplayedDwmStart);
+            framesDisplayedDwm += framesDisplayedDwmEnd;
             //Video.fpsCurrent        = 0;
             UI(() =>
             {
-                Video.FramesDisplayed   = framesDisplayedDwm + showFrameCount;
-                Video.FramesDropped     = SafeSubstract(framesFailed + framesDisplayed, framesDisplayedDwm);
+                Video.FramesDisplayed = framesDisplayedDwm + showFrameCount;
+                Video.FramesDropped = SafeSubstract(framesFailed + framesDisplayed, framesDisplayedDwm);
                 //Video.FPSCurrent        = Video.fpsCurrent;
             });
 
@@ -561,7 +560,7 @@ unsafe partial class Player
     {
         long curLatency = GetBufferedDuration();
 
-        if (CanDebug) Log.Debug($"[Latency {curLatency/10000}ms] Frames: {vFrames.Count} Packets: {vPackets.Count} Speed: {speed}");
+        if (CanDebug) Log.Debug($"[Latency {curLatency / 10000}ms] Frames: {vFrames.Count} Packets: {vPackets.Count} Speed: {speed}");
 
         if (curLatency <= Config.Player.MinLatency) // We've reached the down limit (back to speed x1)
         {
@@ -578,7 +577,7 @@ unsafe partial class Player
             decoder.Flush();
             vFrame = null; // don't dispose (LastFrame)
             requiresBuffering = true;
-            if (CanDebug) Log.Debug($"[Latency {curLatency/10000}ms] Clearing queue");
+            if (CanDebug) Log.Debug($"[Latency {curLatency / 10000}ms] Clearing queue");
             return;
         }
 
@@ -596,11 +595,11 @@ unsafe partial class Player
 
         lastSpeedChangeTicks = curTicks;
 
-        if (CanDebug) Log.Debug($"[Latency {curLatency/10000}ms] Speed changed x{speed} -> x{newSpeed}");
+        if (CanDebug) Log.Debug($"[Latency {curLatency / 10000}ms] Speed changed x{speed} -> x{newSpeed}");
 
         //if (aFrame != null) AudioDecoder.FixSample(aFrame, newSpeed); // Requires lock
         speed = AudioDecoder.Speed = VideoDecoder.Speed = newSpeed;
-        startTicks  = curTime;
+        startTicks = curTime;
         sw.Restart();
     }
 
@@ -610,14 +609,14 @@ unsafe partial class Player
     void ScreamerVASDAudio()
     {
         long bufferTicks, delayTicks, elapsedTicks, waitTicks;
-        long desyncMs       = 0;    // use Ms to avoid rescale inaccuracy
-        long expectingPts   = NoTs; // Will be set on resync
-        bool shouldResync   = true;
-        
-        const long MIN_PLAY_BUFFER  = 40_0000;  // Start fill (TBR: allow some space from MAX to avoid filling all time?*)
-        const long MAX_PLAY_BUFFER  = 80_0000;  // Stop  fill (try to keep it low so we can easier switch speed?*)
-        const long MIN_DEC_BUFFER   = 19_0000;  // Resync when enough decoded buffer (related to MaxAudioFrame, keep it low for now)
-        const long MAX_DESYNC_MS    = 50;       // A small gap between frames can create audio desync (use Ms instead to allow small diff for rescale Tb inaccuracy)
+        long desyncMs = 0;    // use Ms to avoid rescale inaccuracy
+        long expectingPts = NoTs; // Will be set on resync
+        bool shouldResync = true;
+
+        const long MIN_PLAY_BUFFER = 40_0000;  // Start fill (TBR: allow some space from MAX to avoid filling all time?*)
+        const long MAX_PLAY_BUFFER = 80_0000;  // Stop  fill (try to keep it low so we can easier switch speed?*)
+        const long MIN_DEC_BUFFER = 19_0000;  // Resync when enough decoded buffer (related to MaxAudioFrame, keep it low for now)
+        const long MAX_DESYNC_MS = 50;       // A small gap between frames can create audio desync (use Ms instead to allow small diff for rescale Tb inaccuracy)
 
         while (!stopScreamerVASDAudio)
         {
@@ -634,7 +633,7 @@ unsafe partial class Player
             }
 
             bufferTicks = Audio.GetBufferedDuration();
-            
+
             if (!shouldResync)
             {
                 if (bufferTicks > MIN_PLAY_BUFFER)      // Play Buffer has enough samples
@@ -655,12 +654,12 @@ unsafe partial class Player
                     continue;
                 }
 
-                delayTicks  = Audio.GetDeviceDelay();
-                elapsedTicks= (long)(sw.ElapsedTicks * SWFREQ_TO_TICKS);
-                waitTicks   = (long)((aFrame.Timestamp - startTicks) / speed) - (elapsedTicks + delayTicks); // TODO: crash on AllocateCircularBuffer
+                delayTicks = Audio.GetDeviceDelay();
+                elapsedTicks = (long)(sw.ElapsedTicks * SWFREQ_TO_TICKS);
+                waitTicks = (long)((aFrame.Timestamp - startTicks) / speed) - (elapsedTicks + delayTicks); // TODO: crash on AllocateCircularBuffer
 
                 if (Math.Abs(waitTicks) > 5_000_0000) // Far away
-                 {
+                {
                     // TBR: Infinite loop with AllowFindStreamInfo = false on HLS Live (FirstTimestamp different between A/V)
                     // This requires resync (re-seek) to fix A/V desync
                     Log.Warn($"[A] Too Early/Late Frame ({TicksToTimeMini(waitTicks)})");
@@ -719,7 +718,7 @@ unsafe partial class Player
                 Audio.ClearBuffer();
 
                 if (CanInfo) Log.Info($"[A] Resynced at {TicksToTimeMini(aFrame.Timestamp)} [Diff: {TicksToTimeMini((long)((aFrame.Timestamp - startTicks) / speed) - delayTicks)} | {TicksToTimeMini((long)(sw.ElapsedTicks * SWFREQ_TO_TICKS))}]");
-                
+
                 // Fill Enough Samples
                 desyncMs = 0;
                 FillBuffer();
@@ -746,7 +745,7 @@ unsafe partial class Player
                 }
             }
         }
-        
+
         isScreamerVASDAudio = false;
         Audio.ClearBuffer();
 
@@ -761,17 +760,17 @@ unsafe partial class Player
         isScreamerVASDAudio = true;
         Thread t = new(ScreamerVASDAudio) // try-catch
         {
-            #if DEBUG
-            Name            = $"[#{PlayerId}] [A] Playback",
-            #endif
-            IsBackground    = true
+#if DEBUG
+            Name = $"[#{PlayerId}] [A] Playback",
+#endif
+            IsBackground = true
         };
         t.Start();
     }
     void StopScreamerVASDAudio()
     {
         stopScreamerVASDAudio = true;
-        while(isScreamerVASDAudio)
+        while (isScreamerVASDAudio)
             Thread.Sleep(2);
 
         stopScreamerVASDAudio = false;
@@ -783,7 +782,8 @@ unsafe partial class Player
     {
         if (Config.Player.Stats)
         {
-            /*Video.fpsCurrent = */showFrameCount = framesFailed = framesDisplayed = framesDisplayedDwm = framesDisplayedDwmEnd = 0;
+            /*Video.fpsCurrent = */
+            showFrameCount = framesFailed = framesDisplayed = framesDisplayedDwm = framesDisplayedDwmEnd = 0;
             UI(() => /*Video.FPSCurrent = */Video.FramesDropped = Video.FramesDisplayed = 0);
         }
     }

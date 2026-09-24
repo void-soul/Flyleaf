@@ -54,14 +54,14 @@ public class FlyleafSharedOverlay : ContentControl
         host.Overlay.Template = host.OverlayTemplate;
     }
 
-    public Window       Owner           { get; private set; }
-    public IntPtr       OwnerHandle     { get; private set; }
+    public Window Owner { get; private set; }
+    public IntPtr OwnerHandle { get; private set; }
 
-    public Window       Overlay         { get; private set; } = new Window() { WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, AllowsTransparency = true };
-    public IntPtr       OverlayHandle   { get; private set; }
+    public Window Overlay { get; private set; } = new Window() { WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, AllowsTransparency = true };
+    public IntPtr OverlayHandle { get; private set; }
 
-    public double       DpiX            { get; private set; } = 1;
-    public double       DpiY            { get; private set; } = 1;
+    public double DpiX { get; private set; } = 1;
+    public double DpiY { get; private set; } = 1;
 
     static bool isDesignMode;
     Point zeroPoint = new(0, 0);
@@ -80,8 +80,8 @@ public class FlyleafSharedOverlay : ContentControl
         if (isDesignMode)
             return;
 
-        Loaded              += Host_Loaded;
-        DataContextChanged  += Host_DataContextChanged;
+        Loaded += Host_Loaded;
+        DataContextChanged += Host_DataContextChanged;
     }
 
     private void Host_Loaded(object sender, RoutedEventArgs e)
@@ -89,12 +89,12 @@ public class FlyleafSharedOverlay : ContentControl
         if (isDesignMode)
             return;
 
-        Owner                   = Window.GetWindow(this);
-        OwnerHandle             = new WindowInteropHelper(Owner).EnsureHandle();
-        OverlayHandle           = new WindowInteropHelper(Overlay).EnsureHandle();
-        Owner.ContentRendered   += (o, e) => SetWindowPos(OverlayHandle, IntPtr.Zero, 0, 0, 0, 0, (UInt32)(SetWindowPosFlags.SWP_SHOWWINDOW | SetWindowPosFlags.SWP_NOSIZE | SetWindowPosFlags.SWP_NOMOVE));
+        Owner = Window.GetWindow(this);
+        OwnerHandle = new WindowInteropHelper(Owner).EnsureHandle();
+        OverlayHandle = new WindowInteropHelper(Overlay).EnsureHandle();
+        Owner.ContentRendered += (o, e) => SetWindowPos(OverlayHandle, IntPtr.Zero, 0, 0, 0, 0, (UInt32)(SetWindowPosFlags.SWP_SHOWWINDOW | SetWindowPosFlags.SWP_NOSIZE | SetWindowPosFlags.SWP_NOMOVE));
 
-        Owner.DpiChanged        += Owner_DpiChanged;
+        Owner.DpiChanged += Owner_DpiChanged;
         var source = PresentationSource.FromVisual(Owner);
         if (source != null)
         {
@@ -102,22 +102,23 @@ public class FlyleafSharedOverlay : ContentControl
             DpiY = source.CompositionTarget.TransformToDevice.M22;
         }
 
-        LayoutUpdated           += Host_LayoutUpdated;
-        IsVisibleChanged        += Host_IsVisibleChanged;
-        Overlay.MouseDown       += (o, e) => BringToFront();
+        LayoutUpdated += Host_LayoutUpdated;
+        IsVisibleChanged += Host_IsVisibleChanged;
+        Overlay.MouseDown += (o, e) => BringToFront();
 
-        Overlay.MinWidth        = MinWidth;
-        Overlay.MinHeight       = MinHeight;
-        Overlay.MaxWidth        = MaxWidth;
-        Overlay.MaxHeight       = MaxHeight;
-        Overlay.Background      = Brushes.Transparent;
-        Overlay.ShowInTaskbar   = false;
-        Overlay.Owner           = Owner;
+        Overlay.MinWidth = MinWidth;
+        Overlay.MinHeight = MinHeight;
+        Overlay.MaxWidth = MaxWidth;
+        Overlay.MaxHeight = MaxHeight;
+        Overlay.Background = Brushes.Transparent;
+        Overlay.ShowInTaskbar = false;
+        Overlay.Owner = Owner;
         SetParent(OverlayHandle, OwnerHandle);
         SetWindowLong(OverlayHandle, WindowStyles.WS_MINIMIZEBOX | WindowStyles.WS_CLIPSIBLINGS | WindowStyles.WS_CLIPCHILDREN | WindowStyles.WS_VISIBLE | WindowStyles.WS_CHILD);
         SetWindowPos(OverlayHandle, IntPtr.Zero, 0, 0, 0, 0, (uint)(SetWindowPosFlags.SWP_FRAMECHANGED | SetWindowPosFlags.SWP_NOACTIVATE | SetWindowPosFlags.SWP_NOSIZE | SetWindowPosFlags.SWP_NOZORDER | SetWindowPosFlags.SWP_NOOWNERZORDER));
 
-        /*rectInitLast =*/ rectIntersectLast = rectRandom;
+        /*rectInitLast =*/
+        rectIntersectLast = rectRandom;
         Host_LayoutUpdated(null, null);
         Host_IsVisibleChanged(null, new());
     }
@@ -149,9 +150,9 @@ public class FlyleafSharedOverlay : ContentControl
 
         //if (rectInit != rectInitLast)
         //{
-            SetRect(rectInit); // TBR: Performance
-            //rectInitLast = rectInit;
-        //}
+        SetRect(rectInit); // TBR: Performance
+                           //rectInitLast = rectInit;
+                           //}
 
         if (rectIntersect == Rect.Empty)
         {

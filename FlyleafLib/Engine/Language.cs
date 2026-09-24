@@ -5,7 +5,9 @@ namespace FlyleafLib;
 
 public class Language : IEquatable<Language>
 {
-    public string       CultureName    { get => _CultureName; set
+    public string CultureName
+    {
+        get => _CultureName; set
         {   // Required for XML load
             Culture = CultureInfo.GetCultureInfo(value);
             Refresh(this);
@@ -14,19 +16,19 @@ public class Language : IEquatable<Language>
     string _CultureName;
 
     [JsonIgnore]
-    public string       TopEnglishName    { get; private set; }
+    public string TopEnglishName { get; private set; }
 
     [JsonIgnore]
-    public CultureInfo  Culture         { get; private set; }
+    public CultureInfo Culture { get; private set; }
 
     [JsonIgnore]
-    public CultureInfo  TopCulture      { get; private set; }
+    public CultureInfo TopCulture { get; private set; }
 
     [JsonIgnore]
-    public string       IdSubLanguage   { get; private set; } // Can search for online subtitles with this id
+    public string IdSubLanguage { get; private set; } // Can search for online subtitles with this id
 
     [JsonIgnore]
-    public string       OriginalInput   { get; private set; } // Only for Undetermined language (return clone)
+    public string OriginalInput { get; private set; } // Only for Undetermined language (return clone)
 
 
     public override string ToString() => OriginalInput ?? TopEnglishName;
@@ -81,10 +83,10 @@ public class Language : IEquatable<Language>
             Refresh(lang);
         else
         {
-            lang.IdSubLanguage  = "und";
-            lang.TopEnglishName   = "Unknown";
+            lang.IdSubLanguage = "und";
+            lang.TopEnglishName = "Unknown";
             if (name != "und")
-                lang.OriginalInput  = name;
+                lang.OriginalInput = name;
         }
 
         return lang;
@@ -101,7 +103,8 @@ public class Language : IEquatable<Language>
         try
         {
             ret = lang.Length == 3 ? ThreeLetterToCulture(langLower) : CultureInfo.GetCultureInfo(langLower);
-        } catch { }
+        }
+        catch { }
 
         StringComparer cmp = StringComparer.OrdinalIgnoreCase;
 

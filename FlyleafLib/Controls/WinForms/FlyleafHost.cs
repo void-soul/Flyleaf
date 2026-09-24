@@ -1,10 +1,8 @@
-﻿using System.ComponentModel;
+﻿using FlyleafLib.MediaPlayer;
+using System.ComponentModel;
 using System.Drawing;
 using System.Runtime.CompilerServices;
 using System.Windows.Forms;
-
-using FlyleafLib.MediaPlayer;
-
 using static FlyleafLib.Utils.NativeMethods;
 
 namespace FlyleafLib.Controls.WinForms;
@@ -21,9 +19,11 @@ public partial class FlyleafHost : UserControl, IHostPlayer, INotifyPropertyChan
 
     #region Properties / Variables
     Player _Player;
-    public Player       Player          {
+    public Player Player
+    {
         get => _Player;
-        set {
+        set
+        {
             if (_Player == value)
                 return;
 
@@ -31,14 +31,15 @@ public partial class FlyleafHost : UserControl, IHostPlayer, INotifyPropertyChan
             _Player = value;
             SetPlayer(oldPlayer);
             Raise(nameof(Player));
-            }
         }
+    }
 
     bool _IsFullScreen;
-    public bool         IsFullScreen    {
+    public bool IsFullScreen
+    {
         get => _IsFullScreen;
         set
-            {
+        {
             if (_IsFullScreen == value)
                 return;
 
@@ -46,38 +47,38 @@ public partial class FlyleafHost : UserControl, IHostPlayer, INotifyPropertyChan
                 FullScreen();
             else
                 NormalScreen();
-            }
         }
+    }
 
     bool _ToggleFullScreenOnDoubleClick = true;
-    public bool         ToggleFullScreenOnDoubleClick
-                                                { get => _ToggleFullScreenOnDoubleClick; set => Set(ref _ToggleFullScreenOnDoubleClick, value); }
+    public bool ToggleFullScreenOnDoubleClick
+    { get => _ToggleFullScreenOnDoubleClick; set => Set(ref _ToggleFullScreenOnDoubleClick, value); }
 
-    public int          UniqueId                { get; private set; } = -1;
+    public int UniqueId { get; private set; } = -1;
 
     bool _KeyBindings = true;
-    public bool         KeyBindings             { get => _KeyBindings; set => Set(ref _KeyBindings, value); }
+    public bool KeyBindings { get => _KeyBindings; set => Set(ref _KeyBindings, value); }
 
     bool _PanMoveOnCtrl = true;
-    public bool         PanMoveOnCtrl           { get => _PanMoveOnCtrl; set => Set(ref _PanMoveOnCtrl, value); }
+    public bool PanMoveOnCtrl { get => _PanMoveOnCtrl; set => Set(ref _PanMoveOnCtrl, value); }
 
     bool _PanZoomOnCtrlWheel = true;
-    public bool         PanZoomOnCtrlWheel      { get => _PanZoomOnCtrlWheel; set => Set(ref _PanZoomOnCtrlWheel, value); }
+    public bool PanZoomOnCtrlWheel { get => _PanZoomOnCtrlWheel; set => Set(ref _PanZoomOnCtrlWheel, value); }
 
     bool _PanRotateOnShiftWheel = true;
-    public bool         PanRotateOnShiftWheel   { get => _PanRotateOnShiftWheel; set => Set(ref _PanRotateOnShiftWheel, value); }
+    public bool PanRotateOnShiftWheel { get => _PanRotateOnShiftWheel; set => Set(ref _PanRotateOnShiftWheel, value); }
 
     bool _DragMove = true;
-    public bool         DragMove                { get => _DragMove; set => Set(ref _DragMove, value); }
+    public bool DragMove { get => _DragMove; set => Set(ref _DragMove, value); }
 
     bool _OpenOnDrop;
-    public bool         OpenOnDrop              { get => _OpenOnDrop; set { Set(ref _OpenOnDrop, value); AllowDrop = _SwapOnDrop || _OpenOnDrop; } }
+    public bool OpenOnDrop { get => _OpenOnDrop; set { Set(ref _OpenOnDrop, value); AllowDrop = _SwapOnDrop || _OpenOnDrop; } }
 
     bool _SwapOnDrop = true;
-    public bool         SwapOnDrop              { get => _SwapOnDrop; set { Set(ref _SwapOnDrop, value);  AllowDrop = _SwapOnDrop || _OpenOnDrop; } }
+    public bool SwapOnDrop { get => _SwapOnDrop; set { Set(ref _SwapOnDrop, value); AllowDrop = _SwapOnDrop || _OpenOnDrop; } }
 
     bool _SwapDragEnterOnShift = true;
-    public bool         SwapDragEnterOnShift    { get => _SwapDragEnterOnShift; set => Set(ref _SwapDragEnterOnShift, value); }
+    public bool SwapDragEnterOnShift { get => _SwapDragEnterOnShift; set => Set(ref _SwapDragEnterOnShift, value); }
 
 
     double panPrevX, panPrevY;
@@ -96,7 +97,7 @@ public partial class FlyleafHost : UserControl, IHostPlayer, INotifyPropertyChan
 
     public FlyleafHost()
     {
-        UniqueId  = idGenerator++;
+        UniqueId = idGenerator++;
         AllowDrop = _SwapOnDrop || _OpenOnDrop;
         BackColor = Color.Black;
 
@@ -104,15 +105,15 @@ public partial class FlyleafHost : UserControl, IHostPlayer, INotifyPropertyChan
             return;
 
         Log = new(("[#" + UniqueId + "]").PadRight(8, ' ') + $" [FlyleafHost NP] ");
-        
-        KeyUp       += Host_KeyUp;
-        KeyDown     += Host_KeyDown;
+
+        KeyUp += Host_KeyUp;
+        KeyDown += Host_KeyDown;
         DoubleClick += Host_DoubleClick;
-        MouseDown   += Host_MouseDown;
-        MouseMove   += Host_MouseMove;
-        MouseWheel  += Host_MouseWheel;
-        DragEnter   += Host_DragEnter;
-        DragDrop    += Host_DragDrop;
+        MouseDown += Host_MouseDown;
+        MouseMove += Host_MouseMove;
+        MouseWheel += Host_MouseWheel;
+        DragEnter += Host_DragEnter;
+        DragDrop += Host_DragDrop;
 
         // TBR: Should improve performance but might cause issues (not tested)
         //SetStyle(ControlStyles.OptimizedDoubleBuffer, false);
@@ -126,7 +127,7 @@ public partial class FlyleafHost : UserControl, IHostPlayer, INotifyPropertyChan
         if (Player == null)
             return;
 
-        FlyleafHostDropWrap hostWrap = (FlyleafHostDropWrap) e.Data.GetData(typeof(FlyleafHostDropWrap));
+        FlyleafHostDropWrap hostWrap = (FlyleafHostDropWrap)e.Data.GetData(typeof(FlyleafHostDropWrap));
 
         if (hostWrap != null)
         {
@@ -189,7 +190,7 @@ public partial class FlyleafHost : UserControl, IHostPlayer, INotifyPropertyChan
         }
         else if (DragMove && Capture && ParentForm != null && !IsFullScreen)
         {
-            ParentForm.Location  = new Point(ParentForm.Location.X + e.X - mouseLeftDownPoint.X, ParentForm.Location.Y + e.Y - mouseLeftDownPoint.Y);
+            ParentForm.Location = new Point(ParentForm.Location.X + e.X - mouseLeftDownPoint.X, ParentForm.Location.Y + e.Y - mouseLeftDownPoint.Y);
         }
     }
     private void Host_MouseDown(object sender, MouseEventArgs e)

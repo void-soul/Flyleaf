@@ -1,10 +1,9 @@
-﻿using System.ComponentModel;
+﻿using FlyleafLib.MediaPlayer;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-
-using FlyleafLib.MediaPlayer;
 
 namespace FlyleafLib.Controls.WPF
 {
@@ -32,8 +31,8 @@ namespace FlyleafLib.Controls.WPF
 
             initialized = true;
 
-            popUpMenuSubtitles  = ((FrameworkElement)Template.FindName("PART_ContextMenuOwner_Subtitles", this))?.ContextMenu;
-            popUpMenuVideo      = ((FrameworkElement)Template.FindName("PART_ContextMenuOwner_Video", this))?.ContextMenu;
+            popUpMenuSubtitles = ((FrameworkElement)Template.FindName("PART_ContextMenuOwner_Subtitles", this))?.ContextMenu;
+            popUpMenuVideo = ((FrameworkElement)Template.FindName("PART_ContextMenuOwner_Video", this))?.ContextMenu;
 
             if (popUpMenuSubtitles != null)
             {
@@ -98,13 +97,13 @@ namespace FlyleafLib.Controls.WPF
         public static readonly RoutedEvent OpenSettingsEvent = EventManager.RegisterRoutedEvent(nameof(OpenSettings), RoutingStrategy.Bubble, typeof(RoutedEventHandler), typeof(FlyleafBar));
         public event RoutedEventHandler OpenSettings
         {
-            add { AddHandler (OpenSettingsEvent, value); }
+            add { AddHandler(OpenSettingsEvent, value); }
             remove { RemoveHandler(OpenSettingsEvent, value); }
         }
     }
 
     public class OpenSettingsEventArgs : RoutedEventArgs
     {
-        public OpenSettingsEventArgs(RoutedEvent routedEvent, object source) : base(routedEvent, source) {}
+        public OpenSettingsEventArgs(RoutedEvent routedEvent, object source) : base(routedEvent, source) { }
     }
 }

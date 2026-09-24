@@ -1,11 +1,9 @@
-﻿using Vortice.Multimedia;
-using Vortice.XAudio2;
-
-using static Vortice.XAudio2.XAudio2;
-
-using FlyleafLib.MediaFramework.MediaContext;
+﻿using FlyleafLib.MediaFramework.MediaContext;
 using FlyleafLib.MediaFramework.MediaFrame;
 using FlyleafLib.MediaFramework.MediaStream;
+using Vortice.Multimedia;
+using Vortice.XAudio2;
+using static Vortice.XAudio2.XAudio2;
 
 namespace FlyleafLib.MediaPlayer;
 
@@ -20,57 +18,57 @@ public class Audio : NotifyPropertyChanged
     /// Embedded Streams
     /// </summary>
     public ObservableCollection<AudioStream>
-                    Streams         => decoder?.VideoDemuxer.AudioStreams; // TBR: We miss AudioDemuxer embedded streams
+                    Streams => decoder?.VideoDemuxer.AudioStreams; // TBR: We miss AudioDemuxer embedded streams
 
-    public int      StreamIndex     { get => streamIndex;       internal set => Set(ref _StreamIndex, value); }
+    public int StreamIndex { get => streamIndex; internal set => Set(ref _StreamIndex, value); }
     int _StreamIndex, streamIndex = -1;
 
     /// <summary>
     /// Whether the input has audio and it is configured
     /// </summary>
-    public bool     IsOpened        { get => isOpened;          internal set => Set(ref _IsOpened, value); }
-    internal bool   _IsOpened, isOpened;
+    public bool IsOpened { get => isOpened; internal set => Set(ref _IsOpened, value); }
+    internal bool _IsOpened, isOpened;
 
-    public string   Codec           { get => codec;             internal set => Set(ref _Codec, value); }
+    public string Codec { get => codec; internal set => Set(ref _Codec, value); }
     internal string _Codec, codec;
 
     ///// <summary>
     ///// Audio bitrate (Kbps)
     ///// </summary>
-    public double   BitRate         { get => bitRate;           internal set => Set(ref _BitRate, value); }
+    public double BitRate { get => bitRate; internal set => Set(ref _BitRate, value); }
     internal double _BitRate, bitRate;
 
-    public int      Bits            { get => bits;              internal set => Set(ref _Bits, value); }
-    internal int    _Bits, bits;
+    public int Bits { get => bits; internal set => Set(ref _Bits, value); }
+    internal int _Bits, bits;
 
-    public int      Channels        { get => channels;          internal set => Set(ref _Channels, value); }
-    internal int    _Channels, channels;
+    public int Channels { get => channels; internal set => Set(ref _Channels, value); }
+    internal int _Channels, channels;
 
     /// <summary>
     /// Audio player's channels out (currently 2 channels supported only)
     /// </summary>
-    public int      ChannelsOut     { get; } = 2;
+    public int ChannelsOut { get; } = 2;
 
-    public string   ChannelLayout   { get => channelLayout;     internal set => Set(ref _ChannelLayout, value); }
+    public string ChannelLayout { get => channelLayout; internal set => Set(ref _ChannelLayout, value); }
     internal string _ChannelLayout, channelLayout;
 
     ///// <summary>
     ///// Total Dropped Frames
     ///// </summary>
-    public int      FramesDropped   { get => framesDropped;     internal set => Set(ref _FramesDropped, value); }
-    internal int    _FramesDropped, framesDropped;
+    public int FramesDropped { get => framesDropped; internal set => Set(ref _FramesDropped, value); }
+    internal int _FramesDropped, framesDropped;
 
-    public int      FramesDisplayed { get => framesDisplayed;   internal set => Set(ref _FramesDisplayed, value); }
-    internal int    _FramesDisplayed, framesDisplayed;
+    public int FramesDisplayed { get => framesDisplayed; internal set => Set(ref _FramesDisplayed, value); }
+    internal int _FramesDisplayed, framesDisplayed;
 
-    public string   SampleFormat    { get => sampleFormat;      internal set => Set(ref _SampleFormat, value); }
+    public string SampleFormat { get => sampleFormat; internal set => Set(ref _SampleFormat, value); }
     internal string _SampleFormat, sampleFormat;
 
     /// <summary>
     /// Audio sample rate (in/out)
     /// </summary>
-    public int      SampleRate      { get => sampleRate;        internal set => Set(ref _SampleRate, value); }
-    internal int    _SampleRate, sampleRate;
+    public int SampleRate { get => sampleRate; internal set => Set(ref _SampleRate, value); }
+    internal int _SampleRate, sampleRate;
 
     /// <summary>
     /// Audio player's volume / amplifier (valid values 0 - no upper limit)
@@ -80,7 +78,7 @@ public class Audio : NotifyPropertyChanged
         get
         {
             lock (locker)
-                return sourceVoice == null || Mute ? _Volume : (int) ((decimal)sourceVoice.Volume * 100);
+                return sourceVoice == null || Mute ? _Volume : (int)((decimal)sourceVoice.Volume * 100);
         }
         set
         {
@@ -150,24 +148,24 @@ public class Audio : NotifyPropertyChanged
     #region Declaration
     public Player Player => player;
 
-    readonly Player                  player;
-    Config                  Config => player.Config;
-    DecoderContext          decoder => player?.decoder;
+    readonly Player player;
+    Config Config => player.Config;
+    DecoderContext decoder => player?.decoder;
 
-    readonly Action                  uiAction;
+    readonly Action uiAction;
     internal readonly object
                             locker = new();
 
-    IXAudio2                xaudio2;
+    IXAudio2 xaudio2;
     internal IXAudio2MasteringVoice
                             masteringVoice;
     internal IXAudio2SourceVoice
                             sourceVoice;
-    readonly WaveFormat              waveFormat  = new(48000, 16, 2); // Output Audio Device
-    readonly AudioBuffer             audioBuffer = new();
-    internal double         Timebase;
-    internal ulong          submittedSamples;
-    int                     curSampleRate = -1;
+    readonly WaveFormat waveFormat = new(48000, 16, 2); // Output Audio Device
+    readonly AudioBuffer audioBuffer = new();
+    internal double Timebase;
+    internal ulong submittedSamples;
+    int curSampleRate = -1;
     #endregion
 
     public Audio(Player player)
@@ -176,18 +174,18 @@ public class Audio : NotifyPropertyChanged
 
         uiAction = () =>
         {
-            StreamIndex     = streamIndex;
-            IsOpened        = isOpened;
-            Codec           = codec;
-            BitRate         = bitRate;
-            Bits            = bits;
-            Channels        = channels;
-            ChannelLayout   = channelLayout;
-            SampleFormat    = sampleFormat;
-            SampleRate      = sampleRate;
+            StreamIndex = streamIndex;
+            IsOpened = isOpened;
+            Codec = codec;
+            BitRate = bitRate;
+            Bits = bits;
+            Channels = channels;
+            ChannelLayout = channelLayout;
+            SampleFormat = sampleFormat;
+            SampleRate = sampleRate;
 
             FramesDisplayed = framesDisplayed;
-            FramesDropped   = framesDropped;
+            FramesDropped = framesDropped;
         };
 
         Volume = Config.Audio.VolumeMax / 2;
@@ -227,11 +225,11 @@ public class Audio : NotifyPropertyChanged
                 sourceVoice.SetSourceSampleRate((uint)sampleRate);
                 sourceVoice.Start();
 
-                submittedSamples        = 0;
-                Timebase                = 1000 * 10000.0 / sampleRate;
-                masteringVoice.Volume   = Config.Audio.VolumeMax / 100.0f;
-                sourceVoice.Volume      = mute ? 0 : Math.Max(0, _Volume / 100.0f);
-                curSampleRate           = sampleRate;
+                submittedSamples = 0;
+                Timebase = 1000 * 10000.0 / sampleRate;
+                masteringVoice.Volume = Config.Audio.VolumeMax / 100.0f;
+                sourceVoice.Volume = mute ? 0 : Math.Max(0, _Volume / 100.0f);
+                curSampleRate = sampleRate;
             }
             catch (Exception e)
             {
@@ -247,12 +245,12 @@ public class Audio : NotifyPropertyChanged
             if (xaudio2 == null)
                 return;
 
-            xaudio2.        Dispose();
-            sourceVoice?.   Dispose();
+            xaudio2.Dispose();
+            sourceVoice?.Dispose();
             masteringVoice?.Dispose();
-            xaudio2         = null;
-            sourceVoice     = null;
-            masteringVoice  = null;
+            xaudio2 = null;
+            sourceVoice = null;
+            masteringVoice = null;
         }
     }
 
@@ -270,11 +268,11 @@ public class Audio : NotifyPropertyChanged
 
                 framesDisplayed++;
 
-                submittedSamples += (ulong) (aFrame.dataLen / 4); // ASampleBytes
+                submittedSamples += (ulong)(aFrame.dataLen / 4); // ASampleBytes
                 SamplesAdded?.Invoke(this, aFrame);
 
-                audioBuffer.AudioDataPointer= aFrame.dataPtr;
-                audioBuffer.AudioBytes      = (uint)aFrame.dataLen;
+                audioBuffer.AudioDataPointer = aFrame.dataPtr;
+                audioBuffer.AudioBytes = (uint)aFrame.dataLen;
                 sourceVoice.SubmitSourceBuffer(audioBuffer);
             }
             catch (Exception e) // Happens on audio device changed/removed
@@ -286,7 +284,7 @@ public class Audio : NotifyPropertyChanged
             }
         }
     }
-    internal long GetBufferedDuration() { lock (locker) { return (long) ((submittedSamples - sourceVoice.State.SamplesPlayed) * Timebase); } }
+    internal long GetBufferedDuration() { lock (locker) { return (long)((submittedSamples - sourceVoice.State.SamplesPlayed) * Timebase); } }
     internal long GetDeviceDelay()
     {
         /* TODO
@@ -296,15 +294,15 @@ public class Audio : NotifyPropertyChanged
          */
         lock (locker)
         {
-            var latency = (long) ((xaudio2.PerformanceData.CurrentLatencyInSamples * Timebase) - 8_0000);
+            var latency = (long)((xaudio2.PerformanceData.CurrentLatencyInSamples * Timebase) - 8_0000);
             if (latency > TimeSpan.FromMilliseconds(500).Ticks)
             {
-                #if DEBUG
+#if DEBUG
                 player.Log.Error($"!!! Device Latency nosense -> {TicksToTimeMini(latency)}");
-                #endif
+#endif
                 return TimeSpan.FromMilliseconds(40).Ticks;
             }
-            
+
             return latency;
         }
     }
@@ -324,14 +322,14 @@ public class Audio : NotifyPropertyChanged
 
     internal void Reset()
     {
-        streamIndex     = -1;
-        codec           = null;
-        bitRate         = 0;
-        bits            = 0;
-        channels        = 0;
-        channelLayout   = null;
-        sampleFormat    = null;
-        isOpened        = false;
+        streamIndex = -1;
+        codec = null;
+        bitRate = 0;
+        bits = 0;
+        channels = 0;
+        channelLayout = null;
+        sampleFormat = null;
+        isOpened = false;
 
         ClearBuffer();
         player.UIAdd(uiAction);
@@ -344,17 +342,17 @@ public class Audio : NotifyPropertyChanged
             return;
         }
 
-        streamIndex     = decoder.AudioStream.StreamIndex;
-        codec           = decoder.AudioStream.Codec;
-        bits            = decoder.AudioStream.Bits;
-        channels        = decoder.AudioStream.Channels;
-        channelLayout   = decoder.AudioStream.ChannelLayoutStr;
-        sampleFormat    = decoder.AudioStream.SampleFormatStr;
-        isOpened        =!decoder.AudioDecoder.Disposed;
-        sampleRate      = decoder.AudioStream.SampleRate;
+        streamIndex = decoder.AudioStream.StreamIndex;
+        codec = decoder.AudioStream.Codec;
+        bits = decoder.AudioStream.Bits;
+        channels = decoder.AudioStream.Channels;
+        channelLayout = decoder.AudioStream.ChannelLayoutStr;
+        sampleFormat = decoder.AudioStream.SampleFormatStr;
+        isOpened = !decoder.AudioDecoder.Disposed;
+        sampleRate = decoder.AudioStream.SampleRate;
 
         framesDisplayed = 0;
-        framesDropped   = 0;
+        framesDropped = 0;
 
         if (fromCodec)
         {
@@ -367,7 +365,7 @@ public class Audio : NotifyPropertyChanged
             if (sampleRate != curSampleRate)
                 Initialize();
         }
-        
+
         player.UIAdd(uiAction);
     }
     internal void Enable()
@@ -376,7 +374,7 @@ public class Audio : NotifyPropertyChanged
 
         decoder.OpenSuggestedAudio();
 
-        player.ReSync(decoder.AudioStream, (int) (player.curTime / 10000), true);
+        player.ReSync(decoder.AudioStream, (int)(player.curTime / 10000), true);
 
         Refresh();
         player.UIAll();

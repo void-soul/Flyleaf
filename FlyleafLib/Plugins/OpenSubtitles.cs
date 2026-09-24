@@ -1,5 +1,5 @@
-﻿using FlyleafLib.MediaFramework.MediaStream;
-using FlyleafLib.MediaFramework.MediaPlaylist;
+﻿using FlyleafLib.MediaFramework.MediaPlaylist;
+using FlyleafLib.MediaFramework.MediaStream;
 
 namespace FlyleafLib.Plugins;
 
@@ -9,21 +9,21 @@ public class OpenSubtitles : PluginBase, IOpenSubtitles, ISearchLocalSubtitles
 
     public OpenSubtitlesResults Open(string url)
     {
-        foreach(var extStream in Selected.ExternalSubtitlesStreams)
+        foreach (var extStream in Selected.ExternalSubtitlesStreams)
             if (extStream.Url == url)
                 return new(extStream);
 
-        string      title;
-        bool        converted   = false;
-        Language    lang        = Language.Unknown;
+        string title;
+        bool converted = false;
+        Language lang = Language.Unknown;
 
         if (File.Exists(url))
         {
             Selected.FillMediaParts();
 
             FileInfo fi = new(url);
-            title       = fi.Name;
-            
+            title = fi.Name;
+
             if (title.Contains(".utf8"))
             {
                 converted = true;
@@ -31,7 +31,7 @@ public class OpenSubtitles : PluginBase, IOpenSubtitles, ISearchLocalSubtitles
                 if (!title.Contains($".{Language.Unknown.IdSubLanguage}.utf8"))
                     foreach (var lang2 in Config.Subtitles.Languages)
                         if (title.Contains($".{lang2.IdSubLanguage}.utf8", StringComparison.OrdinalIgnoreCase))
-                            { lang = lang2; break; }
+                        { lang = lang2; break; }
             }
             else if (ExtensionsSubtitlesBitmap.Contains(GetUrlExtention(title)))
                 converted = true;
@@ -48,7 +48,8 @@ public class OpenSubtitles : PluginBase, IOpenSubtitles, ISearchLocalSubtitles
                 if (title == null || title.Trim().Length == 0)
                     title = url;
 
-            } catch
+            }
+            catch
             {
                 if (ExtensionsSubtitlesBitmap.Contains(GetUrlExtention(url)))
                     converted = true;
@@ -56,14 +57,14 @@ public class OpenSubtitles : PluginBase, IOpenSubtitles, ISearchLocalSubtitles
                 title = url;
             }
         }
-        
+
         ExternalSubtitlesStream newExtStream = new()
         {
-            Url         = url,
-            Title       = title,
-            Downloaded  = true,
-            Converted   = converted,
-            Language    = lang
+            Url = url,
+            Title = title,
+            Downloaded = true,
+            Converted = converted,
+            Language = lang
         };
 
         AddExternalStream(newExtStream);
@@ -95,12 +96,12 @@ public class OpenSubtitles : PluginBase, IOpenSubtitles, ISearchLocalSubtitles
             if (filesCur.Length > 0)
                 Selected.FillMediaParts();
 
-            foreach(string file in filesCur)
+            foreach (string file in filesCur)
             {
                 bool exists = false;
-                foreach(var extStream in Selected.ExternalSubtitlesStreams)
+                foreach (var extStream in Selected.ExternalSubtitlesStreams)
                     if (extStream.Url == file)
-                        { exists = true; break; }
+                    { exists = true; break; }
 
                 if (exists)
                     continue;
@@ -126,20 +127,21 @@ public class OpenSubtitles : PluginBase, IOpenSubtitles, ISearchLocalSubtitles
                     if (!title.Contains($".{Language.Unknown.IdSubLanguage}.utf8"))
                         foreach (var lang2 in Config.Subtitles.Languages)
                             if (title.Contains($".{lang2.IdSubLanguage}.utf8", StringComparison.OrdinalIgnoreCase))
-                                { lang = lang2; break; }
+                            { lang = lang2; break; }
                 }
 
                 Log.Debug($"Adding [{lang}] {file}");
 
                 AddExternalStream(new ExternalSubtitlesStream()
                 {
-                    Url         = file,
-                    Title       = title,
-                    Converted   = converted,
-                    Downloaded  = true,
-                    Language    = lang
+                    Url = file,
+                    Title = title,
+                    Converted = converted,
+                    Downloaded = true,
+                    Language = lang
                 });
             }
-        } catch (Exception e) { Log.Error($"SearchLocalSubtitles failed ({e.Message})"); }
+        }
+        catch (Exception e) { Log.Error($"SearchLocalSubtitles failed ({e.Message})"); }
     }
 }

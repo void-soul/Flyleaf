@@ -1,8 +1,8 @@
 ﻿using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Windows.Interop;
 using System.Windows;
+using System.Windows.Interop;
 
 namespace FlyleafLib;
 
@@ -13,7 +13,8 @@ public static partial class Utils
         [DllImport("user32.dll", SetLastError = true)]
         public static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
 
-        enum GetWindow_Cmd : uint {
+        enum GetWindow_Cmd : uint
+        {
             GW_HWNDFIRST = 0,
             GW_HWNDLAST = 1,
             GW_HWNDNEXT = 2,
@@ -132,7 +133,7 @@ public static partial class Utils
 
                     Application.Current.Dispatcher.Invoke(() =>
                     {
-                        for (int i=0; i<SavedZOrder.Count; i++)
+                        for (int i = 0; i < SavedZOrder.Count; i++)
                             if (WindowNamesWindows.TryGetValue(SavedZOrder[i].window, out var window) && window.IsVisible)
                                 window.Activate();
 
@@ -146,7 +147,7 @@ public static partial class Utils
             {
                 List<ZOrder> zorders = [];
 
-                foreach(Window window in Window.OwnedWindows)
+                foreach (Window window in Window.OwnedWindows)
                 {
                     ZOrder zorder = new();
                     IntPtr curHwnd = GetHandle(window);
@@ -166,7 +167,7 @@ public static partial class Utils
 
             public void DumpZOrder(List<ZOrder> zorders)
             {
-                for (int i=0; i<zorders.Count; i++)
+                for (int i = 0; i < zorders.Count; i++)
                     Debug.WriteLine(zorders[i].order + " " + zorders[i].window + " | " + WindowNamesWindows[zorders[i].window].Background);
             }
         }

@@ -1,15 +1,15 @@
-﻿using System.Reflection;
-
-using FlyleafLib.Plugins;
+﻿using FlyleafLib.Plugins;
+using System.Reflection;
 
 namespace FlyleafLib;
 
 public class PluginsEngine
 {
     public Dictionary<string, PluginType>
-                    Types       { get; private set; } = [];
+                    Types
+    { get; private set; } = [];
 
-    public string   Folder      { get; private set; }
+    public string Folder { get; private set; }
 
     private readonly Type pluginBaseType = typeof(PluginBase);
 
@@ -30,8 +30,8 @@ public class PluginsEngine
         {
             string[] dirs = Directory.GetDirectories(Folder);
 
-            foreach(string dir in dirs)
-                foreach(string file in Directory.GetFiles(dir, "*.dll"))
+            foreach (string dir in dirs)
+                foreach (string file in Directory.GetFiles(dir, "*.dll"))
                     LoadPlugin(Assembly.LoadFrom(Path.GetFullPath(file)));
         }
         else
@@ -59,7 +59,7 @@ public class PluginsEngine
 
                     if (!Types.ContainsKey(type.Name))
                     {
-                        Types.Add(type.Name, new PluginType() { Name = type.Name, Type = type, Version = assembly.GetName().Version});
+                        Types.Add(type.Name, new PluginType() { Name = type.Name, Type = type, Version = assembly.GetName().Version });
                         Engine.Log.Info($"Plugin loaded ({type.Name} - {assembly.GetName().Version})");
                     }
                     else

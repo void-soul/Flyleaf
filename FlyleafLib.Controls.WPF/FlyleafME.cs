@@ -1,4 +1,6 @@
-﻿using System;
+﻿using FlyleafLib.MediaPlayer;
+using MaterialDesignThemes.Wpf;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -8,13 +10,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-
 using Vortice.Direct3D11;
 using WpfColorFontDialog;
-using MaterialDesignThemes.Wpf;
-
-using FlyleafLib.MediaPlayer;
-
 using static FlyleafLib.Utils;
 
 namespace FlyleafLib.Controls.WPF;
@@ -35,26 +32,26 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
     public FlyleafME(Window standAlone) : base(standAlone) { }
 
     #region Properties
-    public string       UIConfigPath        { get; set; }
-    public string       ConfigPath          { get; set; }
-    public string       EnginePath          { get; set; }
+    public string UIConfigPath { get; set; }
+    public string ConfigPath { get; set; }
+    public string EnginePath { get; set; }
 
-    public Config       Config              => Player?.Config;
+    public Config Config => Player?.Config;
 
     UIConfig _UIConfig;
-    public UIConfig     UIConfig            { get => _UIConfig; set { if (_UIConfig == value) return; _UIConfig = value; Raise(nameof(UIConfig)); } }
+    public UIConfig UIConfig { get => _UIConfig; set { if (_UIConfig == value) return; _UIConfig = value; Raise(nameof(UIConfig)); } }
 
 
-    public AudioEngine  AudioEngine         => Engine.Audio;
-    public EngineConfig ConfigEngine        => Engine.Config;
+    public AudioEngine AudioEngine => Engine.Audio;
+    public EngineConfig ConfigEngine => Engine.Config;
 
     public Dictionary<string, ObservableDictionary<string, string>>
-                        PluginsConfig       => Config?.Plugins;
+                        PluginsConfig => Config?.Plugins;
 
-    public bool         ShowDebug           { get => _ShowDebug; set { Set(ref _ShowDebug, value); Config.Player.Stats = value; } }
+    public bool ShowDebug { get => _ShowDebug; set { Set(ref _ShowDebug, value); Config.Player.Stats = value; } }
     bool _ShowDebug;
 
-    public bool         CanPaste            { get => _CanPaste; set => Set(ref _CanPaste, value); }
+    public bool CanPaste { get => _CanPaste; set => Set(ref _CanPaste, value); }
     bool _CanPaste;
 
     public UITheme SelectedTheme
@@ -73,9 +70,9 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
             {
                 var bndl = new BundledTheme
                 {
-                    PrimaryColor    = MaterialDesignColors.PrimaryColor.Red,
-                    SecondaryColor  = MaterialDesignColors.SecondaryColor.Green,
-                    BaseTheme       = BaseTheme.Dark
+                    PrimaryColor = MaterialDesignColors.PrimaryColor.Red,
+                    SecondaryColor = MaterialDesignColors.SecondaryColor.Green,
+                    BaseTheme = BaseTheme.Dark
                 };
                 theme = bndl.GetTheme();
                 Overlay.Resources.MergedDictionaries.Add(bndl);
@@ -96,7 +93,8 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
     }
     UITheme _SelectedTheme;
 
-    public Color SelectedColor  {
+    public Color SelectedColor
+    {
         get => _SelectedColor;
         set
         {
@@ -125,7 +123,7 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
         }
     }
     Color _SelectedColor;
-    Color  selectedColorPrev;
+    Color selectedColorPrev;
     string selectedColor;
 
     public event EventHandler ThemeLoaded;
@@ -135,15 +133,15 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
     internal Settings
                 settings;
     ContextMenu popUpMenu;
-    MenuItem    popUpAspectRatio;
-    MenuItem    popUpKeepAspectRatio;
-    MenuItem    popUpCustomAspectRatio;
-    MenuItem    popUpCustomAspectRatioSet;
-    string      dialogSettingsIdentifier;
+    MenuItem popUpAspectRatio;
+    MenuItem popUpKeepAspectRatio;
+    MenuItem popUpCustomAspectRatio;
+    MenuItem popUpCustomAspectRatioSet;
+    string dialogSettingsIdentifier;
 
-    Thickness   subsInitialMargin;
+    Thickness subsInitialMargin;
 
-    readonly bool        isDesignMode = (bool) DesignerProperties.IsInDesignModeProperty.GetMetadata(typeof(DependencyObject)).DefaultValue;
+    readonly bool isDesignMode = (bool)DesignerProperties.IsInDesignModeProperty.GetMetadata(typeof(DependencyObject)).DefaultValue;
 
     public override void SetPlayer(Player oldPlayer)
     {
@@ -160,8 +158,8 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
 
         // Updates the key binding actions with the new instances in case of swap or initial load
         bool SubsYUp = false, SubsYDown = false, SubsFontIncrease = false, SubsFontDecrease = false;
-        void aSubsYUp()         { Thickness t = UIConfig.SubsMargin; t.Bottom += 2; UIConfig.SubsMargin = t; }
-        void aSubsYDown()       { Thickness t = UIConfig.SubsMargin; t.Bottom -= 2; UIConfig.SubsMargin = t; }
+        void aSubsYUp() { Thickness t = UIConfig.SubsMargin; t.Bottom += 2; UIConfig.SubsMargin = t; }
+        void aSubsYDown() { Thickness t = UIConfig.SubsMargin; t.Bottom -= 2; UIConfig.SubsMargin = t; }
         void aSubsFontIncrease() => UIConfig.SubsFontSize += 2;
         void aSubsFontDecrease() => UIConfig.SubsFontSize -= 2;
 
@@ -199,13 +197,13 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
         if (!Config.Loaded)
         {
             if (!SubsYUp)
-                Config.Player.KeyBindings.AddCustom(Key.Up,     false, aSubsYUp,           "SubsYUp",          true);
+                Config.Player.KeyBindings.AddCustom(Key.Up, false, aSubsYUp, "SubsYUp", true);
             if (!SubsYDown)
-                Config.Player.KeyBindings.AddCustom(Key.Down,   false, aSubsYDown,         "SubsYDown",        true);
+                Config.Player.KeyBindings.AddCustom(Key.Down, false, aSubsYDown, "SubsYDown", true);
             if (!SubsFontIncrease)
-                Config.Player.KeyBindings.AddCustom(Key.Right,  false, aSubsFontIncrease,  "SubsFontIncrease", true);
+                Config.Player.KeyBindings.AddCustom(Key.Right, false, aSubsFontIncrease, "SubsFontIncrease", true);
             if (!SubsFontDecrease)
-                Config.Player.KeyBindings.AddCustom(Key.Left,   false, aSubsFontDecrease,  "SubsFontDecrease", true);
+                Config.Player.KeyBindings.AddCustom(Key.Left, false, aSubsFontDecrease, "SubsFontDecrease", true);
         }
 
         Player.Renderer.ViewportChanged += ViewportChanged;
@@ -254,19 +252,21 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
         else
             Engine.Loaded += (o, e) => Engine.Config.UIRefresh = true;
 
-        Overlay.Resources.MergedDictionaries.Add(new ResourceDictionary() {
-            Source = new Uri("pack://application:,,,/FlyleafLib.Controls.WPF;component/Resources/MaterialDesignColors.xaml") });
+        Overlay.Resources.MergedDictionaries.Add(new ResourceDictionary()
+        {
+            Source = new Uri("pack://application:,,,/FlyleafLib.Controls.WPF;component/Resources/MaterialDesignColors.xaml")
+        });
 
         DialogHost dialogSettings;
         if (Overlay.Content != null)
         {
-            popUpMenu       = ((FrameworkElement)LogicalTreeHelper.FindLogicalNode((FrameworkElement)Overlay.Content, "PART_ContextMenuOwner"))?.ContextMenu;
-            dialogSettings  = (DialogHost)LogicalTreeHelper.FindLogicalNode((FrameworkElement)Overlay.Content, "PART_DialogSettings");
+            popUpMenu = ((FrameworkElement)LogicalTreeHelper.FindLogicalNode((FrameworkElement)Overlay.Content, "PART_ContextMenuOwner"))?.ContextMenu;
+            dialogSettings = (DialogHost)LogicalTreeHelper.FindLogicalNode((FrameworkElement)Overlay.Content, "PART_DialogSettings");
         }
         else
         {
-            popUpMenu       = ((FrameworkElement)Overlay.Template.FindName("PART_ContextMenuOwner", Overlay))?.ContextMenu;
-            dialogSettings  = (DialogHost)Overlay.Template.FindName("PART_DialogSettings", Overlay);
+            popUpMenu = ((FrameworkElement)Overlay.Template.FindName("PART_ContextMenuOwner", Overlay))?.ContextMenu;
+            dialogSettings = (DialogHost)Overlay.Template.FindName("PART_DialogSettings", Overlay);
         }
 
         if (dialogSettings != null)
@@ -284,27 +284,28 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
             {
                 if (System.IO.File.Exists(UIConfigPath))
                     UIConfig.Load(this, UIConfigPath);
-            } catch { }
+            }
+            catch { }
         }
 
         if (UIConfig == null || !UIConfig.Loaded)
         {
             UIConfig UIConfig = new(this)
             {
-                SubsMargin          = new(0, 0, 0, 48),
-                SubsFontFamily      = "Segoe UI",
-                SubsFontWeight      = FontWeights.Bold.ToString(),
-                SubsFontStyle       = FontStyles.Normal.ToString(),
-                SubsFontStretch     = FontStretches.Normal.ToString(),
-                SubsFontSize        = 48,
+                SubsMargin = new(0, 0, 0, 48),
+                SubsFontFamily = "Segoe UI",
+                SubsFontWeight = FontWeights.Bold.ToString(),
+                SubsFontStyle = FontStyles.Normal.ToString(),
+                SubsFontStretch = FontStretches.Normal.ToString(),
+                SubsFontSize = 48,
                 SubsStrokeThickness = 3,
-                SubsFontColor       = Colors.White,
-                SubsWithinViewport  = true
+                SubsFontColor = Colors.White,
+                SubsWithinViewport = true
             };
 
             var theme = Overlay.Resources.GetTheme();
-            var defaultTheme = new UITheme(this, null) { Name = "Default", PrimaryColor = theme.PrimaryMid.Color, SecondaryColor = theme.SecondaryMid.Color, BackgroundColor = theme.Background, SurfaceColor = Config != null && Config.Video != null ? Config.Video.BackColor : Colors.Black};
-            UIConfig.Themes = 
+            var defaultTheme = new UITheme(this, null) { Name = "Default", PrimaryColor = theme.PrimaryMid.Color, SecondaryColor = theme.SecondaryMid.Color, BackgroundColor = theme.Background, SurfaceColor = Config != null && Config.Video != null ? Config.Video.BackColor : Colors.Black };
+            UIConfig.Themes =
             [
                 new(this, defaultTheme) { Name = "Black & White", PrimaryColor = Colors.White, SecondaryColor = Colors.White, BackgroundColor = Colors.Black, SurfaceColor = Colors.Black },
                 new(this, defaultTheme) { Name = "Blue & Red", PrimaryColor = Colors.DodgerBlue, SecondaryColor = (Color)ColorConverter.ConvertFromString("#e00000"), BackgroundColor = Colors.Black, SurfaceColor = Colors.Black },
@@ -327,11 +328,13 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
             if (uitheme.Name == UIConfig.SelectedTheme)
                 SelectedTheme = uitheme;
 
-        subsInitialMargin   = UIConfig.SubsMargin;
+        subsInitialMargin = UIConfig.SubsMargin;
 
         if (popUpMenu != null)
-            Surface.MouseRightButtonUp += (o, e) => {
-                popUpMenu.PlacementTarget = Overlay; popUpMenu.DataContext = this; popUpMenu.IsOpen = true; };
+            Surface.MouseRightButtonUp += (o, e) =>
+            {
+                popUpMenu.PlacementTarget = Overlay; popUpMenu.DataContext = this; popUpMenu.IsOpen = true;
+            };
 
         Overlay.KeyUp += (o, e) =>
         {
@@ -363,8 +366,8 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
                 if (aspectRatio == AspectRatio.Keep) popUpKeepAspectRatio = (MenuItem)popUpAspectRatio.Items[popUpAspectRatio.Items.Count - 1];
             }
 
-            popUpCustomAspectRatio      = new() { IsCheckable = true };
-            popUpCustomAspectRatioSet   = new() { Header = "Set Custom..." };
+            popUpCustomAspectRatio = new() { IsCheckable = true };
+            popUpCustomAspectRatioSet = new() { Header = "Set Custom..." };
             popUpCustomAspectRatioSet.Click += (n1, n2) => { DialogAspectRatio(); };
 
             popUpAspectRatio.Items.Add(popUpCustomAspectRatio);
@@ -389,23 +392,23 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
     #region ICommands
     void RegisterCommands()
     {
-        OpenFileDialog      = new RelayCommand(OpenFileDialogAction);
-        OpenSettings        = new RelayCommand(OpenSettingsAction);
-        OpenColorPicker     = new RelayCommand(OpenColorPickerAction);
-        ChangeAspectRatio   = new RelayCommand(ChangeAspectRatioAction);
-        SetSubtitlesFont    = new RelayCommand(SetSubtitlesFontAction);
-        ExitApplication     = new RelayCommand(ExitApplicationAction);
-        SetSubsPositionY    = new RelayCommand(SetSubsPositionYAction);
-        ResetSubsPositionY  = new RelayCommand(ResetSubsPositionYAction);
+        OpenFileDialog = new RelayCommand(OpenFileDialogAction);
+        OpenSettings = new RelayCommand(OpenSettingsAction);
+        OpenColorPicker = new RelayCommand(OpenColorPickerAction);
+        ChangeAspectRatio = new RelayCommand(ChangeAspectRatioAction);
+        SetSubtitlesFont = new RelayCommand(SetSubtitlesFontAction);
+        ExitApplication = new RelayCommand(ExitApplicationAction);
+        SetSubsPositionY = new RelayCommand(SetSubsPositionYAction);
+        ResetSubsPositionY = new RelayCommand(ResetSubsPositionYAction);
     }
 
-    public ICommand OpenFileDialog      { get; set; }
+    public ICommand OpenFileDialog { get; set; }
     public void OpenFileDialogAction(object obj = null) => Player.OpenFromFileDialog();
 
-    public ICommand ExitApplication     { get ; set; }
+    public ICommand ExitApplication { get; set; }
     public void ExitApplicationAction(object obj = null) { Application.Current.Shutdown(); }
 
-    public ICommand OpenSettings        { get; set; }
+    public ICommand OpenSettings { get; set; }
     public async void OpenSettingsAction(object obj = null)
     {
         if (Config == null || dialogSettingsIdentifier == null) // || Player == null ?
@@ -427,31 +430,31 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
 
         Dictionary<FLFilters, int> saveFilterValues = [];
         Dictionary<VideoProcessorFilter, int> saveD3FilterValues = [];
-        foreach(var filter in Config.Video.FLFilters.Values)
+        foreach (var filter in Config.Video.FLFilters.Values)
             saveFilterValues.Add(filter.Filter, filter.Value);
 
         foreach (var filter in Config.Video.D3Filters.Values)
             saveD3FilterValues.Add(filter.Filter, filter.Value);
 
-        var wasOnTop    = DetachedTopMost;
+        var wasOnTop = DetachedTopMost;
         DetachedTopMost = false;
-        var prevConfig  = Config.Video.Clone();
-        var result      = await DialogHost.Show(settings, dialogSettingsIdentifier);
+        var prevConfig = Config.Video.Clone();
+        var result = await DialogHost.Show(settings, dialogSettingsIdentifier);
         DetachedTopMost = wasOnTop;
         Player.Activity.IsEnabled
                         = true;
-        KeyBindings     = prevKeys;
+        KeyBindings = prevKeys;
 
         if (result == null)
             return;
 
         if (result.ToString() == "cancel")
         {
-            Config.Video.HDRtoSDRMethod         = prevConfig.HDRtoSDRMethod;
-            Config.Video.SDRDisplayNitsCustom   = prevConfig.SDRDisplayNitsCustom;
+            Config.Video.HDRtoSDRMethod = prevConfig.HDRtoSDRMethod;
+            Config.Video.SDRDisplayNitsCustom = prevConfig.SDRDisplayNitsCustom;
 
-            foreach(var filter in saveFilterValues)
-                Config.Video.FLFilters[filter.Key].Value  = filter.Value;
+            foreach (var filter in saveFilterValues)
+                Config.Video.FLFilters[filter.Key].Value = filter.Value;
 
             foreach (var filter in saveD3FilterValues)
                 Config.Video.D3Filters[filter.Key].Value = filter.Value;
@@ -469,7 +472,7 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
     }
     private void OpenSettingsFired(object sender, RoutedEventArgs e) => OpenSettingsAction();
 
-    public ICommand OpenColorPicker     { get; set; }
+    public ICommand OpenColorPicker { get; set; }
     public async void OpenColorPickerAction(object curColor)
     {
         selectedColor = curColor.ToString();
@@ -489,7 +492,7 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
             SelectedColor = selectedColorPrev;
     }
 
-    public ICommand ChangeAspectRatio   { get; set; }
+    public ICommand ChangeAspectRatio { get; set; }
     public void ChangeAspectRatioAction(object obj = null)
     {
         MenuItem mi = ((MenuItem)obj);
@@ -506,15 +509,15 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
             Config.Video.AspectRatio = mi.Header.ToString();
     }
 
-    public ICommand ResetSubsPositionY  { get; set; }
+    public ICommand ResetSubsPositionY { get; set; }
     public void ResetSubsPositionYAction(object obj = null) => UIConfig.SubsMargin = subsInitialMargin;
 
-    public ICommand SetSubsPositionY    { get; set; }
+    public ICommand SetSubsPositionY { get; set; }
     public void SetSubsPositionYAction(object y) { Thickness t = UIConfig.SubsMargin; t.Bottom += int.Parse(y.ToString()); UIConfig.SubsMargin = t; }
 
-    public ICommand SetSubtitlesFont    { get; set; }
-    static readonly FontWeightConverter  fontWeightConv  = new();
-    static readonly FontStyleConverter   fontStyleConv   = new();
+    public ICommand SetSubtitlesFont { get; set; }
+    static readonly FontWeightConverter fontWeightConv = new();
+    static readonly FontStyleConverter fontStyleConv = new();
     static readonly FontStretchConverter fontStretchConv = new();
     public void SetSubtitlesFontAction(object obj = null)
     {
@@ -526,11 +529,11 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
         if (dialog.ShowDialog() == true && dialog.Font != null)
         {
             UIConfig.SubsFontFamily = dialog.Font.Family.ToString();
-            UIConfig.SubsFontSize   = dialog.Font.Size;
+            UIConfig.SubsFontSize = dialog.Font.Size;
             UIConfig.SubsFontWeight = dialog.Font.Weight.ToString();
-            UIConfig.SubsFontStretch= dialog.Font.Stretch.ToString();
-            UIConfig.SubsFontStyle  = dialog.Font.Style.ToString();
-            UIConfig.SubsFontColor  = dialog.Font.BrushColor.Color;
+            UIConfig.SubsFontStretch = dialog.Font.Stretch.ToString();
+            UIConfig.SubsFontStyle = dialog.Font.Style.ToString();
+            UIConfig.SubsFontColor = dialog.Font.BrushColor.Color;
         }
     }
     #endregion
@@ -541,20 +544,20 @@ public class FlyleafME : FlyleafHost, INotifyPropertyChanged
         if (dialogSettingsIdentifier == null) return;
         if (DialogHost.IsDialogOpen(dialogSettingsIdentifier)) return;
 
-        var stackVertical    = new StackPanel() { Height=100, Orientation = Orientation.Vertical };
-        var stackHorizontal1 = new StackPanel() { Margin = new Thickness(10), Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Center};
+        var stackVertical = new StackPanel() { Height = 100, Orientation = Orientation.Vertical };
+        var stackHorizontal1 = new StackPanel() { Margin = new Thickness(10), Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Center };
         var stackHorizontal2 = new StackPanel() { Margin = new Thickness(10), Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Center };
 
-        var textBox = new TextBox() { VerticalAlignment = VerticalAlignment.Center, Width = 70, Margin = new Thickness(10, 0, 0, 0), Text=Config.Video.AspectRatioCustom.ToString()};
+        var textBox = new TextBox() { VerticalAlignment = VerticalAlignment.Center, Width = 70, Margin = new Thickness(10, 0, 0, 0), Text = Config.Video.AspectRatioCustom.ToString() };
         textBox.PreviewTextInput += (n1, n2) => { n2.Handled = !Regex.IsMatch(n2.Text, @"^[0-9\.\,\/\:]+$"); };
 
         var buttonOK = new Button() { Content = "OK" };
         var buttonCancel = new Button() { Margin = new Thickness(10, 0, 0, 0), Content = "Cancel" };
 
-        buttonOK.Click +=       (n1, n2) => { if (textBox.Text != AspectRatio.Invalid) Config.Video.AspectRatioCustom = textBox.Text; DialogHost.Close(dialogSettingsIdentifier); };
-        buttonCancel.Click +=   (n1, n2) => { DialogHost.Close(dialogSettingsIdentifier); };
+        buttonOK.Click += (n1, n2) => { if (textBox.Text != AspectRatio.Invalid) Config.Video.AspectRatioCustom = textBox.Text; DialogHost.Close(dialogSettingsIdentifier); };
+        buttonCancel.Click += (n1, n2) => { DialogHost.Close(dialogSettingsIdentifier); };
 
-        stackHorizontal1.Children.Add(new TextBlock() { VerticalAlignment = VerticalAlignment.Center, Text="Set Custom Ratio: "});
+        stackHorizontal1.Children.Add(new TextBlock() { VerticalAlignment = VerticalAlignment.Center, Text = "Set Custom Ratio: " });
         stackHorizontal1.Children.Add(textBox);
         stackHorizontal2.Children.Add(buttonOK);
         stackHorizontal2.Children.Add(buttonCancel);

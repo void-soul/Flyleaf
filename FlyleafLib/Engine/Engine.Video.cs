@@ -1,9 +1,7 @@
-﻿using System.Windows.Data;
-
+﻿using FlyleafLib.MediaFramework.MediaDevice;
+using System.Windows.Data;
 using Vortice.DXGI;
 using Vortice.MediaFoundation;
-
-using FlyleafLib.MediaFramework.MediaDevice;
 
 namespace FlyleafLib;
 
@@ -13,15 +11,17 @@ public class VideoEngine
     /// List of Video Capture Devices
     /// </summary>
     public ObservableCollection<VideoDevice>
-                            CapDevices          { get; set; } = [];
-    
+                            CapDevices
+    { get; set; } = [];
+
     /// <summary>
     /// List of GPU Adpaters <see cref="Config.VideoConfig.GPUAdapter"/>
     /// </summary>
     public Dictionary<long, GPUAdapter>
-                            GPUAdapters         { get; private set; }
+                            GPUAdapters
+    { get; private set; }
 
-    internal IDXGIFactory2  Factory;
+    internal IDXGIFactory2 Factory;
 
     private readonly object lockCapDevices = new();
 
@@ -44,8 +44,8 @@ public class VideoEngine
             Engine.Video.CapDevices.Clear();
 
             var devices = MediaFactory.MFEnumVideoDeviceSources();
-                foreach (var device in devices)
-                try { Engine.Video.CapDevices.Add(new(device.FriendlyName, device.SymbolicLink)); } catch(Exception) { }
+            foreach (var device in devices)
+                try { Engine.Video.CapDevices.Add(new(device.FriendlyName, device.SymbolicLink)); } catch (Exception) { }
         }
     }
 
@@ -59,7 +59,7 @@ public class VideoEngine
         {
             var desc = adapter.Description;
             adapters[desc.Luid] = GetGPUAdapter(adapter, desc);
-            dump += $"[#{i+1}] {adapters[desc.Luid]}\r\n";
+            dump += $"[#{i + 1}] {adapters[desc.Luid]}\r\n";
         }
 
         Engine.Log.Info($"GPU Adapters\r\n{dump}");
@@ -70,14 +70,14 @@ public class VideoEngine
     public GPUAdapter GetGPUAdapter(IDXGIAdapter adapter, AdapterDescription desc)
         => new()
         {
-            SystemMemory    = desc.DedicatedSystemMemory.Value,
-            VideoMemory     = desc.DedicatedVideoMemory.Value,
-            SharedMemory    = desc.SharedSystemMemory.Value,
-            Vendor          = (GPUVendor)desc.VendorId,
-            Description     = desc.Description,
-            Id              = desc.DeviceId,
-            Luid            = desc.Luid,
-            dxgiAdapter     = adapter
+            SystemMemory = desc.DedicatedSystemMemory.Value,
+            VideoMemory = desc.DedicatedVideoMemory.Value,
+            SharedMemory = desc.SharedSystemMemory.Value,
+            Vendor = (GPUVendor)desc.VendorId,
+            Description = desc.Description,
+            Id = desc.DeviceId,
+            Luid = desc.Luid,
+            dxgiAdapter = adapter
         };
 
     public List<GPUOutput> GetGPUOutputs(IDXGIAdapter adapter)
@@ -90,25 +90,25 @@ public class VideoEngine
         {
             IDXGIOutput6 output6 = null;
             GPUOutput gpuOutput;
-            
+
             if (Environment.OSVersion.Version.Major >= 10)
                 output6 = output.QueryInterfaceOrNull<IDXGIOutput6>();
-            
+
             if (output6 != null)
             {
                 var outdesc = output6.Description1;
-                
+
                 gpuOutput = new()
                 {
-                    Hwnd        = outdesc.Monitor,
-                    DeviceName  = outdesc.DeviceName,
-                    Left        = outdesc.DesktopCoordinates.Left,
-                    Top         = outdesc.DesktopCoordinates.Top,
-                    Right       = outdesc.DesktopCoordinates.Right,
-                    Bottom      = outdesc.DesktopCoordinates.Bottom,
-                    IsAttached  = outdesc.AttachedToDesktop,
-                    Rotation    = outdesc.Rotation,
-                    MaxLuminance= outdesc.MaxLuminance
+                    Hwnd = outdesc.Monitor,
+                    DeviceName = outdesc.DeviceName,
+                    Left = outdesc.DesktopCoordinates.Left,
+                    Top = outdesc.DesktopCoordinates.Top,
+                    Right = outdesc.DesktopCoordinates.Right,
+                    Bottom = outdesc.DesktopCoordinates.Bottom,
+                    IsAttached = outdesc.AttachedToDesktop,
+                    Rotation = outdesc.Rotation,
+                    MaxLuminance = outdesc.MaxLuminance
                 };
 
                 output6.Dispose();
@@ -116,18 +116,18 @@ public class VideoEngine
             else
             {
                 var outdesc = output.Description;
-                
+
                 gpuOutput = new()
                 {
-                    Hwnd        = outdesc.Monitor,
-                    DeviceName  = outdesc.DeviceName,
-                    Left        = outdesc.DesktopCoordinates.Left,
-                    Top         = outdesc.DesktopCoordinates.Top,
-                    Right       = outdesc.DesktopCoordinates.Right,
-                    Bottom      = outdesc.DesktopCoordinates.Bottom,
-                    IsAttached  = outdesc.AttachedToDesktop,
-                    Rotation    = outdesc.Rotation,
-                    MaxLuminance= 200
+                    Hwnd = outdesc.Monitor,
+                    DeviceName = outdesc.DeviceName,
+                    Left = outdesc.DesktopCoordinates.Left,
+                    Top = outdesc.DesktopCoordinates.Top,
+                    Right = outdesc.DesktopCoordinates.Right,
+                    Bottom = outdesc.DesktopCoordinates.Bottom,
+                    IsAttached = outdesc.AttachedToDesktop,
+                    Rotation = outdesc.Rotation,
+                    MaxLuminance = 200
                 };
             }
 

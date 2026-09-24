@@ -1,17 +1,15 @@
-﻿using Vortice.Direct3D11;
-
+﻿using FlyleafLib.MediaFramework.MediaDecoder;
+using Vortice.Direct3D11;
 using ID3D11Texture2D = Vortice.Direct3D11.ID3D11Texture2D;
-
-using FlyleafLib.MediaFramework.MediaDecoder;
 
 namespace FlyleafLib.MediaFramework.MediaRenderer;
 
 public unsafe partial class Renderer
 {
-    internal AVBufferRef*           ffDevice, ffFrames;
-    internal ID3D11Texture2D        ffTexture; // required from videostream?
-    internal Texture2DDescription   ffTextureDesc;
-    internal FFFramesInfo           ffFramesInfo = new();
+    internal AVBufferRef* ffDevice, ffFrames;
+    internal ID3D11Texture2D ffTexture; // required from videostream?
+    internal Texture2DDescription ffTextureDesc;
+    internal FFFramesInfo ffFramesInfo = new();
     internal class FFFramesInfo { public AVCodecID CodecId; public int CodedWidth; public int CodedHeight; }
 
     void FFmpegSetup()
@@ -26,21 +24,21 @@ public unsafe partial class Renderer
             return;
         }
 
-        var device_ctx          = (AVHWDeviceContext*)                  ffDevice->data;
-        var hwCtx               = (AVD3D11VADeviceContext*)             device_ctx->hwctx;
+        var device_ctx = (AVHWDeviceContext*)ffDevice->data;
+        var hwCtx = (AVD3D11VADeviceContext*)device_ctx->hwctx;
 
-        hwCtx->device           = (Flyleaf.FFmpeg.ID3D11Device*)        device. NativePointer;
-        hwCtx->device_context   = (Flyleaf.FFmpeg.ID3D11DeviceContext*) context.NativePointer;
-        hwCtx->video_device     = (Flyleaf.FFmpeg.ID3D11VideoDevice*)   vd.     NativePointer;
-        hwCtx->video_context    = (Flyleaf.FFmpeg.ID3D11VideoContext*)  vc.     NativePointer;
+        hwCtx->device = (Flyleaf.FFmpeg.ID3D11Device*)device.NativePointer;
+        hwCtx->device_context = (Flyleaf.FFmpeg.ID3D11DeviceContext*)context.NativePointer;
+        hwCtx->video_device = (Flyleaf.FFmpeg.ID3D11VideoDevice*)vd.NativePointer;
+        hwCtx->video_context = (Flyleaf.FFmpeg.ID3D11VideoContext*)vc.NativePointer;
 
         int ret = av_hwdevice_ctx_init(ffDevice);
         if (ret == 0)
         {   // FFmpeg refs
-            device. AddRef();
+            device.AddRef();
             context.AddRef();
-            vd.     AddRef();
-            vc.     AddRef();
+            vd.AddRef();
+            vc.AddRef();
         }
         else
         {   // Should never fail (av_hwdevice_ctx_init will find all pointers set)
@@ -68,7 +66,7 @@ public unsafe partial class Renderer
             if (NeedsHWFrames(codecCtx))
             {
                 if (CanDebug) Log.Debug("Re-allocating HW frames");
-                fixed(AVBufferRef** ptr = &ffFrames) av_buffer_unref(ptr);
+                fixed (AVBufferRef** ptr = &ffFrames) av_buffer_unref(ptr);
                 Frames.Dispose();
                 ffTexture.Dispose();
             }
@@ -78,21 +76,21 @@ public unsafe partial class Renderer
                 return true;
             }
         }
-        
+
         int ret;
-       
-        fixed(AVBufferRef** ptr = &ffFrames)
+
+        fixed (AVBufferRef** ptr = &ffFrames)
             if ((ret = avcodec_get_hw_frames_parameters(codecCtx, ffDevice, VideoDecoder.HW_PIX_FMT, ptr)) != 0)
             {
                 ffFramesInfo.CodecId = AVCodecID.None;
                 Log.Error($"{FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
                 return false;
             }
-            
-        var framesCtx       = (AVHWFramesContext*)ffFrames->data;
-        var reqSize         = framesCtx->initial_pool_size;
-        var hwCtx           = (AVD3D11VAFramesContext *)framesCtx->hwctx;
-        hwCtx->BindFlags   |= (uint)BindFlags.Decoder | (uint)BindFlags.ShaderResource;
+
+        var framesCtx = (AVHWFramesContext*)ffFrames->data;
+        var reqSize = framesCtx->initial_pool_size;
+        var hwCtx = (AVD3D11VAFramesContext*)framesCtx->hwctx;
+        hwCtx->BindFlags |= (uint)BindFlags.Decoder | (uint)BindFlags.ShaderResource;
 
         if ((ret = av_hwframe_ctx_init(ffFrames)) != 0)
         {
@@ -108,13 +106,13 @@ public unsafe partial class Renderer
             Config.Decoder.SetMaxVideoFrames(codecCtx->extra_hw_frames - 1);
         }
 
-        ffTexture = new((nint) hwCtx->texture);
+        ffTexture = new((nint)hwCtx->texture);
         ffTexture.AddRef(); // FFmpeg ref
         ffTextureDesc = ffTexture.Description;
 
-        ffFramesInfo.CodecId    = codecCtx->codec_id;
+        ffFramesInfo.CodecId = codecCtx->codec_id;
         ffFramesInfo.CodedWidth = codecCtx->coded_width;
-        ffFramesInfo.CodedHeight= codecCtx->coded_height;
+        ffFramesInfo.CodedHeight = codecCtx->coded_height;
 
         if (CanDebug) Log.Debug($"HW frames allocated ({framesCtx->initial_pool_size})");
 
@@ -124,31 +122,31 @@ public unsafe partial class Renderer
     bool NeedsHWFrames(AVCodecContext* codecCtx)
     {   // Checks whether we need to Re-Allocate FFFrames - Called by ConfigHWFrames (Helper)
 
-        var codecId     = codecCtx->codec_id;
-        var codedWidth  = codecCtx->coded_width;
+        var codecId = codecCtx->codec_id;
+        var codedWidth = codecCtx->coded_width;
         var codedHeight = codecCtx->coded_height;
 
-        if (ffFramesInfo.CodecId        == codecId      &&
-            ffFramesInfo.CodedWidth     == codedWidth   &&
-            ffFramesInfo.CodedHeight    == codedHeight)
+        if (ffFramesInfo.CodecId == codecId &&
+            ffFramesInfo.CodedWidth == codedWidth &&
+            ffFramesInfo.CodedHeight == codedHeight)
             return false;
 
         // https://github.com/FFmpeg/FFmpeg/blob/master/libavcodec/dxva2.c#L593
         int surface_alignment;
 
-        if (     codecId == AVCodecID.Mpeg2video)
+        if (codecId == AVCodecID.Mpeg2video)
             surface_alignment = 32;
         else if (codecId == AVCodecID.Hevc || codecId == AVCodecID.Av1)
             surface_alignment = 128;
         else
             surface_alignment = 16;
 
-        if (FFALIGN(codedWidth,  surface_alignment) != ffTextureDesc.Width ||
+        if (FFALIGN(codedWidth, surface_alignment) != ffTextureDesc.Width ||
             FFALIGN(codedHeight, surface_alignment) != ffTextureDesc.Height)
             return true;
 
         int num_surfaces = 1;
-        if (     codecId == AVCodecID.H264|| codecId == AVCodecID.Hevc)
+        if (codecId == AVCodecID.H264 || codecId == AVCodecID.Hevc)
             num_surfaces += 16;
         else if (codecId == AVCodecID.Vp9 || codecId == AVCodecID.Av1)
             num_surfaces += 8;
@@ -177,11 +175,11 @@ public unsafe partial class Renderer
 
         if (ffDevice != null)
         {
-            fixed(AVBufferRef** ptr = &ffDevice)
+            fixed (AVBufferRef** ptr = &ffDevice)
                 av_buffer_unref(ptr);
 
             ffDevice = null;
         }
-            
+
     }
 }

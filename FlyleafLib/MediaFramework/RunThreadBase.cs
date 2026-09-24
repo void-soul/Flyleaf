@@ -3,7 +3,8 @@
 public abstract class RunThreadBase : NotifyPropertyChanged
 {
     Status _Status = Status.Stopped;
-    public Status               Status          {
+    public Status Status
+    {
         get => _Status;
         set
         {
@@ -16,7 +17,8 @@ public abstract class RunThreadBase : NotifyPropertyChanged
             }
         }
     }
-    public bool                 IsRunning       {
+    public bool IsRunning
+    {
         get
         {
             bool ret = false;
@@ -25,14 +27,15 @@ public abstract class RunThreadBase : NotifyPropertyChanged
         }
     }
 
-    public bool                 Disposed        { get; protected set; } = true;
-    public int                  UniqueId        { get; protected set; } = -1;
-    public bool                 PauseOnQueueFull{ get; set; }
+    public bool Disposed { get; protected set; } = true;
+    public int UniqueId { get; protected set; } = -1;
+    public bool PauseOnQueueFull { get; set; }
 
-    protected volatile bool     CriticalArea;
-    protected Thread            thread;
-    protected AutoResetEvent    threadARE       = new(false);
-    protected string            threadName      {
+    protected volatile bool CriticalArea;
+    protected Thread thread;
+    protected AutoResetEvent threadARE = new(false);
+    protected string threadName
+    {
         get => _threadName;
         set
         {
@@ -42,9 +45,9 @@ public abstract class RunThreadBase : NotifyPropertyChanged
     }
     string _threadName;
 
-    internal LogHandler         Log;
-    internal object             lockActions     = new();
-    internal object             lockStatus      = new();
+    internal LogHandler Log;
+    internal object lockActions = new();
+    internal object lockStatus = new();
 
     public RunThreadBase(int uniqueId = -1)
         => UniqueId = uniqueId == -1 ? GetUniqueId() : uniqueId;
@@ -87,7 +90,7 @@ public abstract class RunThreadBase : NotifyPropertyChanged
 
                 while (Status == Status.Draining) Thread.Sleep(3);
                 while (Status == Status.Stopping) Thread.Sleep(3);
-                while (Status == Status.Pausing)  Thread.Sleep(3);
+                while (Status == Status.Pausing) Thread.Sleep(3);
 
                 if (Status == Status.Ended) return;
 
@@ -102,10 +105,10 @@ public abstract class RunThreadBase : NotifyPropertyChanged
 
                 thread = new(Run)
                 {
-                    #if DEBUG
+#if DEBUG
                     Name = $"[#{UniqueId}] [{threadName}]",
-                    #endif
-                    IsBackground= true,
+#endif
+                    IsBackground = true,
                 };
                 Status = Status.Running;
                 thread.Start();

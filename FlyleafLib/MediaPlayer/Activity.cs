@@ -11,9 +11,10 @@ public class Activity : NotifyPropertyChanged
      */
 
     public ActivityMode Mode
-        {
+    {
         get => mode;
-        set {
+        set
+        {
 
             if (value == mode)
                 return;
@@ -31,15 +32,18 @@ public class Activity : NotifyPropertyChanged
                 swMouse.Restart();
 
             UI(SetMode);
-            }
         }
+    }
     internal ActivityMode _Mode = ActivityMode.FullActive, mode = ActivityMode.FullActive;
 
     /// <summary>
     /// Should use Timeout to Enable/Disable it. Use this only for temporary disable.
     /// </summary>
-    public bool IsEnabled           { get => _IsEnabled;
-        set {
+    public bool IsEnabled
+    {
+        get => _IsEnabled;
+        set
+        {
 
             if (value && _Timeout <= 0)
             {
@@ -66,11 +70,11 @@ public class Activity : NotifyPropertyChanged
                 _IsEnabled = value;
                 RaiseUI(nameof(IsEnabled));
             }
-            }
         }
+    }
     bool _IsEnabled;
 
-    public int  Timeout             { get => _Timeout; set { _Timeout = value; IsEnabled = value > 0; } }
+    public int Timeout { get => _Timeout; set { _Timeout = value; IsEnabled = value > 0; } }
     int _Timeout;
 
     readonly Player player;
@@ -94,7 +98,7 @@ public class Activity : NotifyPropertyChanged
             lock (cursorLocker)
             {
                 // Windows 11 Bug: When pressing winkey (ShowCursor return negative but still visible, SetCursor(null) fails too)
-                while (NativeMethods.ShowCursor(false) >= 0);
+                while (NativeMethods.ShowCursor(false) >= 0) ;
                 isCursorHidden = true;
             }
 
@@ -103,7 +107,7 @@ public class Activity : NotifyPropertyChanged
         {
             lock (cursorLocker)
             {
-                while (NativeMethods.ShowCursor(true) < 0);
+                while (NativeMethods.ShowCursor(true) < 0) ;
                 isCursorHidden = false;
             }
         }
@@ -132,16 +136,16 @@ public class Activity : NotifyPropertyChanged
     /// <summary>
     /// Sets Mode to Active
     /// </summary>
-    public void ForceActive()       => Mode = ActivityMode.Active;
+    public void ForceActive() => Mode = ActivityMode.Active;
     /// <summary>
     /// Sets Mode to Full Active
     /// </summary>
-    public void ForceFullActive()   => Mode = ActivityMode.FullActive;
+    public void ForceFullActive() => Mode = ActivityMode.FullActive;
 
     /// <summary>
     /// Updates Active Timestamp
     /// </summary>
-    public void RefreshActive()     => swKeyboard.Restart();
+    public void RefreshActive() => swKeyboard.Restart();
 
     /// <summary>
     /// Updates Full Active Timestamp
@@ -161,13 +165,14 @@ public class Activity : NotifyPropertyChanged
                 {
                     lock (cursorLocker)
                     {
-                        while (NativeMethods.ShowCursor(true) < 0);
+                        while (NativeMethods.ShowCursor(true) < 0) ;
                         isCursorHidden = false;
-                        foreach(var player in Engine.Players)
+                        foreach (var player in Engine.Players)
                             player.Activity.RefreshFullActive();
                     }
 
-                } catch { }
+                }
+                catch { }
             }
 
             return false;

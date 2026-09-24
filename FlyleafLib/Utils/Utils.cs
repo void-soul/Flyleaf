@@ -1,21 +1,20 @@
-﻿using System.Diagnostics;
+﻿using Microsoft.Win32;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows;
-
-using Microsoft.Win32;
 using Vortice.Direct3D11;
 
 namespace FlyleafLib;
 
 public static partial class Utils
 {
-    public static readonly Rect         RectZero            = new(); // Rect.Empty has infinity values
-    public static readonly Point        PointEmpty          = new();
-    public static readonly CornerRadius CornerRadiusEmpty   = new();
+    public static readonly Rect RectZero = new(); // Rect.Empty has infinity values
+    public static readonly Point PointEmpty = new();
+    public static readonly CornerRadius CornerRadiusEmpty = new();
 
 
     // VLC : https://github.com/videolan/vlc/blob/master/modules/gui/qt/dialogs/preferences/simple_preferences.cpp
@@ -51,7 +50,7 @@ public static partial class Utils
         "sub", "sup"
     ];
 
-    public static readonly List<string> ExtensionsSubtitles = [..ExtensionsSubtitlesText, ..ExtensionsSubtitlesBitmap];
+    public static readonly List<string> ExtensionsSubtitles = [.. ExtensionsSubtitlesText, .. ExtensionsSubtitlesBitmap];
 
     public static readonly List<string> ExtensionsVideo =
     [
@@ -240,7 +239,7 @@ public static partial class Utils
         return moviesSorted;
     }
     public sealed class NaturalStringComparer : IComparer<string>
-        { public int Compare(string a, string b) => NativeMethods.StrCmpLogicalW(a, b); }
+    { public int Compare(string a, string b) => NativeMethods.StrCmpLogicalW(a, b); }
 
     public static string GetRecInnerException(Exception e)
     {
@@ -282,11 +281,11 @@ public static partial class Utils
 
     public class MediaParts
     {
-        public string   Title       { get; set; } = "";
-        public string   Extension   { get; set; } = "";
-        public int      Season      { get; set; }
-        public int      Episode     { get; set; }
-        public int      Year        { get; set; }
+        public string Title { get; set; } = "";
+        public string Extension { get; set; } = "";
+        public int Season { get; set; }
+        public int Episode { get; set; }
+        public int Year { get; set; }
     }
     public static MediaParts GetMediaParts(string title, bool checkSeasonEpisodeOnly = false)
     {
@@ -480,7 +479,7 @@ public static partial class Utils
         Span<char> buffer = stackalloc char[input.Length];
         input.AsSpan().CopyTo(buffer);
         buffer[0] = char.ToLowerInvariant(buffer[0]);
-    
+
         return new string(buffer);
     }
 
@@ -607,8 +606,8 @@ public static partial class Utils
     {
         Dictionary<string, string> dict = [];
 
-        int nameStart   = 0;
-        int equalPos    = -1;
+        int nameStart = 0;
+        int equalPos = -1;
         for (int i = 0; i < query.Length; i++)
         {
             if (query[i] == '=')
@@ -620,8 +619,8 @@ public static partial class Utils
                 else
                     dict[query[nameStart..equalPos].ToString()] = query.Slice(equalPos + 1, i - equalPos - 1).ToString();
 
-                equalPos    = -1;
-                nameStart   = i + 1;
+                equalPos = -1;
+                nameStart = i + 1;
             }
         }
 
@@ -661,7 +660,7 @@ public static partial class Utils
             }
         };
     }
-        
+
 
     public static readonly double SWFREQ_TO_TICKS = 10000000.0 / Stopwatch.Frequency;
     public static string ToHexadecimal(byte[] bytes)
@@ -702,21 +701,21 @@ public static partial class Utils
     private static partial Regex RxNonAlphaNumeric();
 
     #region Temp Transfer (v4)
-    #nullable enable
-    static readonly string metaSpaces = new(' ',"[Metadata] ".Length);
+#nullable enable
+    static readonly string metaSpaces = new(' ', "[Metadata] ".Length);
     public static string GetDumpMetadata(Dictionary<string, string>? metadata, string? exclude = null)
     {
         if (metadata == null || metadata.Count == 0)
             return "";
 
         int maxLen = 0;
-        foreach(var item in metadata)
+        foreach (var item in metadata)
             if (item.Key.Length > maxLen && item.Key != exclude)
                 maxLen = item.Key.Length;
 
         string dump = "";
         int i = 1;
-        foreach(var item in metadata)
+        foreach (var item in metadata)
         {
             if (item.Key == exclude)
             {
@@ -734,7 +733,7 @@ public static partial class Utils
 
         if (dump == "")
             return "";
-        
+
         return $"\t[Metadata] {dump}";
     }
     public static string TicksToTime(long ticks)
@@ -796,7 +795,7 @@ public static partial class Utils
             else
                 return ts.ToString(@"d\-hh\:mm\:ss\.fff");
         }
-        
+
         if (ts.TotalMinutes > -1)
             return ts.ToString(@"\-ss\.fff");
         else if (ts.TotalHours > -1)
@@ -813,7 +812,7 @@ public static partial class Utils
         var enumValues = Enum.GetValuesAsUnderlyingType(typeof(T));
         //var enumValues = Enum.GetValues(typeof(T)); // breaks AOT?
 
-        foreach(T flag in enumValues)
+        foreach (T flag in enumValues)
             if (value.HasFlag(flag) && flag.ToString() != "None")
                 values.Add(flag);
 
@@ -828,7 +827,7 @@ public static partial class Utils
             return ret;
 
         for (int i = 0; i < values.Count - 1; i++)
-            ret += values[i] + separator; 
+            ret += values[i] + separator;
 
         return ret + values[^1];
     }
@@ -840,6 +839,6 @@ public static partial class Utils
         av_free(t1);
         return ret;
     }
-    #nullable disable
+#nullable disable
     #endregion
 }

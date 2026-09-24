@@ -16,7 +16,7 @@ public unsafe partial class Renderer
                 if (filterCaps.HasFlag(filterCap))
                 {
                     var filter = ToVideoProcessorFilter(filterCap);
-                    var range  = ve.GetVideoProcessorFilterRange(filter);
+                    var range = ve.GetVideoProcessorFilterRange(filter);
                     d3CacheEntry.Filters.Add(filter, range);
                 }
 
@@ -35,11 +35,11 @@ public unsafe partial class Renderer
                     {   // Initializes Existing Supported Filters in Config (1st time - probably none)
                         userFilter.Initialize(this);
                         if (userFilter.Value != userFilter.Default)
-                            { ucfg.hasD3Filters = true; vc.VideoProcessorSetStreamFilter(vp, 0, filter, true, userFilter.Value); }
+                        { ucfg.hasD3Filters = true; vc.VideoProcessorSetStreamFilter(vp, 0, filter, true, userFilter.Value); }
                     }
                     else
                     {   // Fills Supported FilterSpecs from Cached to Config (1st time only)
-                         lock (ucfg.lockD3Filters)
+                        lock (ucfg.lockD3Filters)
                             ucfg.D3Filters.Add(filter, new(this, filter, filterSpec));
                     }
                 }
@@ -48,12 +48,12 @@ public unsafe partial class Renderer
         }
         else
         {   // Initializes Existing Supported Filters in Config and Sets non-default Values
-            foreach(var userFilter in ucfg.D3Filters.Values)
+            foreach (var userFilter in ucfg.D3Filters.Values)
             {
                 ucfg.hasD3Filters = false;
                 userFilter.Initialize(this);
                 if (userFilter.Value != userFilter.Default)
-                    { ucfg.hasD3Filters = true; vc.VideoProcessorSetStreamFilter(vp, 0, userFilter.Filter, true, userFilter.Value); }
+                { ucfg.hasD3Filters = true; vc.VideoProcessorSetStreamFilter(vp, 0, userFilter.Filter, true, userFilter.Value); }
             }
         }
     }
@@ -64,7 +64,7 @@ public unsafe partial class Renderer
 
         ucfg.hasD3Filters = false;
 
-        foreach(var flFilter in ucfg.FLFilters.Values)
+        foreach (var flFilter in ucfg.FLFilters.Values)
             if (ucfg.D3Filters.TryGetValue(ToVideoProcessorFilter(flFilter.Filter), out var d3Filter))
             {
                 d3Filter.Value = (int)Math.Round(Scale(flFilter.Value, flFilter.Minimum, flFilter.Maximum, d3Filter.Minimum, d3Filter.Maximum));
@@ -92,14 +92,14 @@ public unsafe partial class Renderer
 
     static VideoProcessorFilter ToVideoProcessorFilter(VideoProcessorFilterCaps filter) => filter switch
     {
-        VideoProcessorFilterCaps.Brightness         => VideoProcessorFilter.Brightness,
-        VideoProcessorFilterCaps.Contrast           => VideoProcessorFilter.Contrast,
-        VideoProcessorFilterCaps.Hue                => VideoProcessorFilter.Hue,
-        VideoProcessorFilterCaps.Saturation         => VideoProcessorFilter.Saturation,
-        VideoProcessorFilterCaps.EdgeEnhancement    => VideoProcessorFilter.EdgeEnhancement,
-        VideoProcessorFilterCaps.NoiseReduction     => VideoProcessorFilter.NoiseReduction,
-        VideoProcessorFilterCaps.AnamorphicScaling  => VideoProcessorFilter.AnamorphicScaling,
-        VideoProcessorFilterCaps.StereoAdjustment   => VideoProcessorFilter.StereoAdjustment,
+        VideoProcessorFilterCaps.Brightness => VideoProcessorFilter.Brightness,
+        VideoProcessorFilterCaps.Contrast => VideoProcessorFilter.Contrast,
+        VideoProcessorFilterCaps.Hue => VideoProcessorFilter.Hue,
+        VideoProcessorFilterCaps.Saturation => VideoProcessorFilter.Saturation,
+        VideoProcessorFilterCaps.EdgeEnhancement => VideoProcessorFilter.EdgeEnhancement,
+        VideoProcessorFilterCaps.NoiseReduction => VideoProcessorFilter.NoiseReduction,
+        VideoProcessorFilterCaps.AnamorphicScaling => VideoProcessorFilter.AnamorphicScaling,
+        VideoProcessorFilterCaps.StereoAdjustment => VideoProcessorFilter.StereoAdjustment,
         _ => default,
     };
 }
@@ -108,14 +108,15 @@ public class D3Filter : NotifyPropertyChanged
 {   // NOTE: Serialization requires Public sets and constructor
 
     [JsonIgnore]
-    public bool         Available   => renderer != null;
+    public bool Available => renderer != null;
     public VideoProcessorFilter
-                        Filter      { get; set; }
-    public int          Minimum     { get; set; }
-    public int          Maximum     { get; set; }
-    public float        Step        { get; set; }
-    public int          Default     { get; set; }
-    public int          Value       { get => _Value; set { if (Set(ref _Value, value)) renderer?.D3SetFilter(this); }}
+                        Filter
+    { get; set; }
+    public int Minimum { get; set; }
+    public int Maximum { get; set; }
+    public float Step { get; set; }
+    public int Default { get; set; }
+    public int Value { get => _Value; set { if (Set(ref _Value, value)) renderer?.D3SetFilter(this); } }
     protected int _Value;
 
     internal Renderer renderer;
@@ -124,11 +125,11 @@ public class D3Filter : NotifyPropertyChanged
 
     internal D3Filter(Renderer renderer, VideoProcessorFilter filter, VideoProcessorFilterRange filterSpec)
     {
-        Filter      = filter;
-        Minimum     = filterSpec.Minimum;
-        Maximum     = filterSpec.Maximum;
-        Step        = filterSpec.Multiplier;
-        Default     = Value = filterSpec.Default;
+        Filter = filter;
+        Minimum = filterSpec.Minimum;
+        Maximum = filterSpec.Maximum;
+        Step = filterSpec.Multiplier;
+        Default = Value = filterSpec.Default;
         this.renderer = renderer;
     }
 
@@ -148,8 +149,8 @@ public class D3Filter : NotifyPropertyChanged
 class D3CacheEntry
 {   // Checks Success and Filters support for D3VP once per LUID
 
-    public static VideoProcessorFilter[]        AllFilters      = Enum.GetValues<VideoProcessorFilter>();
-    public static VideoProcessorFilterCaps[]    AllFilterCaps   = Enum.GetValues<VideoProcessorFilterCaps>();
+    public static VideoProcessorFilter[] AllFilters = Enum.GetValues<VideoProcessorFilter>();
+    public static VideoProcessorFilterCaps[] AllFilterCaps = Enum.GetValues<VideoProcessorFilterCaps>();
 
     public static Dictionary<long, D3CacheEntry>
                 D3Cache = [];
@@ -157,7 +158,7 @@ class D3CacheEntry
     public Dictionary<VideoProcessorFilter, VideoProcessorFilterRange>
                 Filters = [];
 
-    public bool Failed  = true;
+    public bool Failed = true;
 
     public static D3CacheEntry Get(long luid, out bool needsFillUnlock)
     {
@@ -166,7 +167,7 @@ class D3CacheEntry
             if (D3Cache.TryGetValue(luid, out var d3vp))
             {
                 needsFillUnlock = false;
-                lock(d3vp) return d3vp;
+                lock (d3vp) return d3vp;
             }
 
             needsFillUnlock = true;

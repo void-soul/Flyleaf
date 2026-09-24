@@ -1,83 +1,80 @@
-﻿using System.Runtime.InteropServices;
-
+﻿using FlyleafLib.MediaFramework.MediaDecoder;
+using FlyleafLib.MediaFramework.MediaFrame;
+using System.Runtime.InteropServices;
 using Vortice;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
 using Vortice.Mathematics;
-
-using ID3D11VideoContext    = Vortice.Direct3D11.ID3D11VideoContext;
-using ID3D11VideoDevice     = Vortice.Direct3D11.ID3D11VideoDevice;
-
-using FlyleafLib.MediaFramework.MediaDecoder;
-using FlyleafLib.MediaFramework.MediaFrame;
+using ID3D11VideoContext = Vortice.Direct3D11.ID3D11VideoContext;
+using ID3D11VideoDevice = Vortice.Direct3D11.ID3D11VideoDevice;
 
 namespace FlyleafLib.MediaFramework.MediaRenderer;
 
 public unsafe partial class Renderer
 {
-    public bool                     D3Disposed      { get; private set; } = true;
+    public bool D3Disposed { get; private set; } = true;
     readonly object lockD3 = new();
 
-    public VideoFrameFormat         FieldType       { get; private set; } = VideoFrameFormat.Progressive;
-    public bool                     SuperResolution { get; private set; }
+    public VideoFrameFormat FieldType { get; private set; } = VideoFrameFormat.Progressive;
+    public bool SuperResolution { get; private set; }
 
-    ID3D11VideoDevice               vd;
-    ID3D11VideoProcessor            vp;
-    ID3D11VideoContext              vc;
-    ID3D11VideoProcessorEnumerator  ve;
+    ID3D11VideoDevice vd;
+    ID3D11VideoProcessor vp;
+    ID3D11VideoContext vc;
+    ID3D11VideoProcessorEnumerator ve;
     static VideoProcessorContentDescription
-                                    vped        = new()
-    {   // TBR: should have max sizes here or possible fail on blt?
-        Usage           = VideoUsage.PlaybackNormal,
-        InputFrameFormat= VideoFrameFormat.Progressive,
+                                    vped = new()
+                                    {   // TBR: should have max sizes here or possible fail on blt?
+                                        Usage = VideoUsage.PlaybackNormal,
+                                        InputFrameFormat = VideoFrameFormat.Progressive,
 
-        InputFrameRate  = new(1, 1),
-        OutputFrameRate = new(1, 1),
-        InputWidth      = 1,
-        InputHeight     = 1,
-        OutputWidth     = 1,
-        OutputHeight    = 1,
-    };
-    static VideoProcessorOutputViewDescription  vpovd = new() { ViewDimension = VideoProcessorOutputViewDimension.Texture2D };
+                                        InputFrameRate = new(1, 1),
+                                        OutputFrameRate = new(1, 1),
+                                        InputWidth = 1,
+                                        InputHeight = 1,
+                                        OutputWidth = 1,
+                                        OutputHeight = 1,
+                                    };
+    static VideoProcessorOutputViewDescription vpovd = new() { ViewDimension = VideoProcessorOutputViewDimension.Texture2D };
 
-    readonly VideoProcessorStream[]          vpsa        = [new() { Enable = true }];
+    readonly VideoProcessorStream[] vpsa = [new() { Enable = true }];
     VideoProcessorInputViewDescription
-                                    vpivd       = new()
-        {
-            FourCC          = 0, // TBR: if required to specify this (uint)Format.NV12,
-            ViewDimension   = VideoProcessorInputViewDimension.Texture2D,
-            Texture2D       = new() { MipSlice = 0, ArraySlice = 0 }
-        };
-    VideoProcessorColorSpace        d3ColorIn   = new() { Usage = 0, YCbCr_xvYCC = 0 };
-    static VideoProcessorColorSpace d3ColorOut  = new()
+                                    vpivd = new()
+                                    {
+                                        FourCC = 0, // TBR: if required to specify this (uint)Format.NV12,
+                                        ViewDimension = VideoProcessorInputViewDimension.Texture2D,
+                                        Texture2D = new() { MipSlice = 0, ArraySlice = 0 }
+                                    };
+    VideoProcessorColorSpace d3ColorIn = new() { Usage = 0, YCbCr_xvYCC = 0 };
+    static VideoProcessorColorSpace d3ColorOut = new()
     {
-        Usage           = 0,
-        RGB_Range       = 0,
-        YCbCr_Matrix    = 1,
-        YCbCr_xvYCC     = 0,
-        Nominal_Range   = 2
+        Usage = 0,
+        RGB_Range = 0,
+        YCbCr_Matrix = 1,
+        YCbCr_xvYCC = 0,
+        Nominal_Range = 2
     };
-    ID3D11PixelShader               d3psY, d3psUV;
-    string                          psYId, psYIdPrev, psUVId, psUVIdPrev;
-    Texture2DDescription            d3txtDesc   = new()
+    ID3D11PixelShader d3psY, d3psUV;
+    string psYId, psYIdPrev, psUVId, psUVIdPrev;
+    Texture2DDescription d3txtDesc = new()
     {
-        Usage       = ResourceUsage.Default,
-        BindFlags   = BindFlags.ShaderResource | BindFlags.RenderTarget,
-        ArraySize   = 1,
-        MipLevels   = 1,
+        Usage = ResourceUsage.Default,
+        BindFlags = BindFlags.ShaderResource | BindFlags.RenderTarget,
+        ArraySize = 1,
+        MipLevels = 1,
         SampleDescription = new(1, 0)
     };
-    readonly RenderTargetViewDescription[]   d3rtvDesc   = new RenderTargetViewDescription[2];
-    FillPlanesDelegate              D3FillPlanesStage;
+    readonly RenderTargetViewDescription[] d3rtvDesc = new RenderTargetViewDescription[2];
+    FillPlanesDelegate D3FillPlanesStage;
 
-    bool                            d3CanPresent; // Don't render / present during out of bounds viewport
+    bool d3CanPresent; // Don't render / present during out of bounds viewport
 
     void D3Init()
     {
         d3rtvDesc[0].ViewDimension = d3rtvDesc[1].ViewDimension = RenderTargetViewDimension.Texture2D;
         d3rtvDesc[0].Format = Format.R8_UNorm;
         d3rtvDesc[1].Format = Format.R8G8_UNorm;
-        d3txtDesc.Format    = Format.NV12;
+        d3txtDesc.Format = Format.NV12;
     }
 
     void D3Setup()
@@ -95,11 +92,11 @@ public unsafe partial class Renderer
 
             return;
         }
-        
+
         try { vc = context.QueryInterface<ID3D11VideoContext>(); } catch { vc = null; }
         if (vc != null)
-            if (vd.CreateVideoProcessorEnumerator   (ref vped, out ve).Success)    // TBR: vpcd config (maybe requires max sizes)
-                vd.CreateVideoProcessor             (ve, 0, out vp);               // TBR: config for which rate index?
+            if (vd.CreateVideoProcessorEnumerator(ref vped, out ve).Success)    // TBR: vpcd config (maybe requires max sizes)
+                vd.CreateVideoProcessor(ve, 0, out vp);               // TBR: config for which rate index?
 
         if (vp == null)
         {
@@ -144,16 +141,16 @@ public unsafe partial class Renderer
 
         if (scfg.ColorRange == ColorRange.Full)
         {
-            d3ColorIn.RGB_Range     = 0;
+            d3ColorIn.RGB_Range = 0;
             d3ColorIn.Nominal_Range = 2;
         }
         else
         {
-            d3ColorIn.RGB_Range     = 1;
+            d3ColorIn.RGB_Range = 1;
             d3ColorIn.Nominal_Range = 1;
         }
 
-        d3ColorIn.YCbCr_Matrix = scfg.ColorSpace != ColorSpace.Bt601? 1u : 0u;
+        d3ColorIn.YCbCr_Matrix = scfg.ColorSpace != ColorSpace.Bt601 ? 1u : 0u;
 
         vc.VideoProcessorSetStreamColorSpace(vp, 0, d3ColorIn);
 
@@ -161,11 +158,11 @@ public unsafe partial class Renderer
     }
     bool D3HWConfig()
     {
-        FillPlanes  = D3HWFillPlanes;
-        psCase      = PSCase.HWD3;
+        FillPlanes = D3HWFillPlanes;
+        psCase = PSCase.HWD3;
 
         d3txtDesc.Width = scfg.txtWidth;
-        d3txtDesc.Height= scfg.txtHeight;
+        d3txtDesc.Height = scfg.txtHeight;
 
         return true;
     }
@@ -182,11 +179,11 @@ public unsafe partial class Renderer
         context.VSSetShader(vsSimple);
         vpivd.Texture2D.ArraySlice = 0;
 
-        D3FillPlanesStage   = FillPlanes;
-        FillPlanes          = D3SWFillPlanes;
-        psCase              = PSCase.SWD3;
-        d3txtDesc.Width     = scfg.txtWidth  & ~1u;
-        d3txtDesc.Height    = scfg.txtHeight & ~1u;
+        D3FillPlanesStage = FillPlanes;
+        FillPlanes = D3SWFillPlanes;
+        psCase = PSCase.SWD3;
+        d3txtDesc.Width = scfg.txtWidth & ~1u;
+        d3txtDesc.Height = scfg.txtHeight & ~1u;
 
         // RGB
         // Single Plane (Packed): RGBA
@@ -244,9 +241,9 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
 
         VideoFrame mFrame = new()
         {
-            AVFrame     = frame,
-            Timestamp   = (long)(frame->pts * scfg.Timebase) - VideoDecoder.Demuxer.StartTime,
-            VPIV        = vd.CreateVideoProcessorInputView(ffTexture, ve, vpivd)
+            AVFrame = frame,
+            Timestamp = (long)(frame->pts * scfg.Timebase) - VideoDecoder.Demuxer.StartTime,
+            VPIV = vd.CreateVideoProcessorInputView(ffTexture, ve, vpivd)
         };
 
         frame = av_frame_alloc();
@@ -282,10 +279,10 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
             context.Draw(6, 0);
             rtvUV.Dispose();
         }
-        
+
         mFrame.Dispose();
-        mFrame.Texture  = [nv12];
-        mFrame.VPIV     = vd.CreateVideoProcessorInputView(nv12, ve, vpivd);
+        mFrame.Texture = [nv12];
+        mFrame.VPIV = vd.CreateVideoProcessorInputView(nv12, ve, vpivd);
 
         return mFrame;
     }
@@ -298,8 +295,8 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
             psShader[psYId] = shader;
         }
 
-        d3psY       = shader;
-        psYIdPrev   = psYId;
+        d3psY = shader;
+        psYIdPrev = psYId;
     }
     void D3SetPSUV(string uniqueId, ReadOnlySpan<char> sampleHLSL)
     {
@@ -309,8 +306,8 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
             psShader[psUVId] = shader;
         }
 
-        d3psUV      = shader;
-        psUVIdPrev  = psUVId;
+        d3psUV = shader;
+        psUVIdPrev = psUVId;
     }
 
     void D3SetViewport(int width, int height)
@@ -324,15 +321,15 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
         else
         {
             if (scfg.PixelComp0Depth <= 8 && // Seems it crashes with 10-bit?
-               (((rotation ==  0 || rotation == 180) && view.Width > VisibleWidth  && view.Height > VisibleHeight) ||
+               (((rotation == 0 || rotation == 180) && view.Width > VisibleWidth && view.Height > VisibleHeight) ||
                 ((rotation == 90 || rotation == 270) && view.Width > VisibleHeight && view.Height > VisibleWidth)))
                 EnableSuperRes();
             else
                 DisableSuperRes();
         }
 
-        int right   = (int)(view.X + view.Width);
-        int bottom  = (int)(view.Y + view.Height);
+        int right = (int)(view.X + view.Width);
+        int bottom = (int)(view.Y + view.Height);
 
         if (view.Width < 1 || view.Y >= height || view.X >= width || bottom <= 0 || right <= 0)
         {
@@ -345,81 +342,81 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
         RawRect dst = new(
                 Math.Max((int)view.X, 0),
                 Math.Max((int)view.Y, 0),
-                Math.Min(right      , width),
-                Math.Min(bottom     , height));
-            
-        double croppedWidth     = d3txtDesc.Width   - crop.Width;
-        double croppedHeight    = d3txtDesc.Height  - crop.Height;
-        int dstWidth            = dst.Right  - dst.Left;
-        int dstHeight           = dst.Bottom - dst.Top;
+                Math.Min(right, width),
+                Math.Min(bottom, height));
 
-        int     cropLeft,   cropTop,    cropRight,  cropBottom;
-        int     srcLeft,    srcTop,     srcRight,   srcBottom;
-        double  scaleX,     scaleY,     scaleXRot,  scaleYRot;
+        double croppedWidth = d3txtDesc.Width - crop.Width;
+        double croppedHeight = d3txtDesc.Height - crop.Height;
+        int dstWidth = dst.Right - dst.Left;
+        int dstHeight = dst.Bottom - dst.Top;
+
+        int cropLeft, cropTop, cropRight, cropBottom;
+        int srcLeft, srcTop, srcRight, srcBottom;
+        double scaleX, scaleY, scaleXRot, scaleYRot;
 
         if (rotation == 0)
         {
-            cropLeft    = view.X < 0 ? (int)(-view.X) : 0;
-            cropTop     = view.Y < 0 ? (int)(-view.Y) : 0;
+            cropLeft = view.X < 0 ? (int)(-view.X) : 0;
+            cropTop = view.Y < 0 ? (int)(-view.Y) : 0;
 
-            scaleX      = croppedWidth  / view.Width;
-            scaleY      = croppedHeight / view.Height;
+            scaleX = croppedWidth / view.Width;
+            scaleY = croppedHeight / view.Height;
 
-            srcLeft     = (int)(crop.Left + cropLeft * scaleX);
-            srcTop      = (int)(crop.Top  + cropTop  * scaleY);
-            srcRight    = srcLeft + (int)(dstWidth  * scaleX);
-            srcBottom   = srcTop  + (int)(dstHeight * scaleY);
+            srcLeft = (int)(crop.Left + cropLeft * scaleX);
+            srcTop = (int)(crop.Top + cropTop * scaleY);
+            srcRight = srcLeft + (int)(dstWidth * scaleX);
+            srcBottom = srcTop + (int)(dstHeight * scaleY);
         }
         else if (rotation == 180)
         {
-            cropRight   = right  > width  ? right  - width  : 0;
-            cropBottom  = bottom > height ? bottom - height : 0;
+            cropRight = right > width ? right - width : 0;
+            cropBottom = bottom > height ? bottom - height : 0;
 
-            scaleX      = croppedWidth  / view.Width;
-            scaleY      = croppedHeight / view.Height;
-                
-            srcLeft     = (int)(crop.Left + cropRight  * scaleX);
-            srcTop      = (int)(crop.Top  + cropBottom * scaleY);
-            srcRight    = srcLeft + (int)(dstWidth  * scaleX);
-            srcBottom   = srcTop  + (int)(dstHeight * scaleY);
+            scaleX = croppedWidth / view.Width;
+            scaleY = croppedHeight / view.Height;
+
+            srcLeft = (int)(crop.Left + cropRight * scaleX);
+            srcTop = (int)(crop.Top + cropBottom * scaleY);
+            srcRight = srcLeft + (int)(dstWidth * scaleX);
+            srcBottom = srcTop + (int)(dstHeight * scaleY);
         }
         else if (rotation == 90)
         {
-            cropTop     = view.Y < 0 ? (int)(-view.Y) : 0;
-            cropRight   = right > width ? right - width : 0;
+            cropTop = view.Y < 0 ? (int)(-view.Y) : 0;
+            cropRight = right > width ? right - width : 0;
 
-            scaleXRot   = croppedWidth  / view.Height;
-            scaleYRot   = croppedHeight / view.Width;
-                
-            srcLeft     = (int)(crop.Left + cropTop    * scaleXRot);
-            srcTop      = (int)(crop.Top  + cropRight  * scaleYRot);
-            srcRight    = srcLeft + (int)(dstHeight * scaleXRot);
-            srcBottom   = srcTop  + (int)(dstWidth  * scaleYRot);
+            scaleXRot = croppedWidth / view.Height;
+            scaleYRot = croppedHeight / view.Width;
+
+            srcLeft = (int)(crop.Left + cropTop * scaleXRot);
+            srcTop = (int)(crop.Top + cropRight * scaleYRot);
+            srcRight = srcLeft + (int)(dstHeight * scaleXRot);
+            srcBottom = srcTop + (int)(dstWidth * scaleYRot);
         }
         else if (rotation == 270)
         {
-            cropLeft    = view.X < 0 ? (int)(-view.X) : 0;
-            cropBottom  = bottom > height ? bottom - height : 0;
+            cropLeft = view.X < 0 ? (int)(-view.X) : 0;
+            cropBottom = bottom > height ? bottom - height : 0;
 
-            scaleXRot   = croppedWidth  / view.Height;
-            scaleYRot   = croppedHeight / view.Width;
-                
-            srcLeft     = (int)(crop.Left + cropBottom * scaleXRot);
-            srcTop      = (int)(crop.Top  + cropLeft   * scaleYRot);
-            srcRight    = srcLeft + (int)(dstHeight * scaleXRot);
-            srcBottom   = srcTop  + (int)(dstWidth  * scaleYRot);
+            scaleXRot = croppedWidth / view.Height;
+            scaleYRot = croppedHeight / view.Width;
+
+            srcLeft = (int)(crop.Left + cropBottom * scaleXRot);
+            srcTop = (int)(crop.Top + cropLeft * scaleYRot);
+            srcRight = srcLeft + (int)(dstHeight * scaleXRot);
+            srcBottom = srcTop + (int)(dstWidth * scaleYRot);
         }
         else
             srcLeft = srcTop = srcRight = srcBottom = 0;
-            
+
         RawRect src = new(
-            Math.Max(srcLeft    , 0),
-            Math.Max(srcTop     , 0),
-            Math.Min(srcRight   , (int)d3txtDesc.Width),
-            Math.Min(srcBottom  , (int)d3txtDesc.Height));
-            
+            Math.Max(srcLeft, 0),
+            Math.Max(srcTop, 0),
+            Math.Min(srcRight, (int)d3txtDesc.Width),
+            Math.Min(srcBottom, (int)d3txtDesc.Height));
+
         vc.VideoProcessorSetStreamSourceRect(vp, 0, true, src);
-        vc.VideoProcessorSetStreamDestRect  (vp, 0, true, dst);
+        vc.VideoProcessorSetStreamDestRect(vp, 0, true, dst);
     }
     void D3SetSize()
     {
@@ -449,14 +446,14 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
     }
     void D3SetCrop()
     {
-        crop            = scfg.Crop + ucfg.crop;
-        VisibleWidth    = scfg.txtWidth  - crop.Width;
-        VisibleHeight   = scfg.txtHeight - crop.Height;
+        crop = scfg.Crop + ucfg.crop;
+        VisibleWidth = scfg.txtWidth - crop.Width;
+        VisibleHeight = scfg.txtHeight - crop.Height;
 
         SetVisibleSizeAndRatioHelper();
 
         vpRequests &= ~VPRequestType.Crop;
-        vpRequests |=  VPRequestType.Viewport;
+        vpRequests |= VPRequestType.Viewport;
     }
     void D3Deinterlace()
     {
@@ -470,26 +467,26 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
     struct SuperResNvidia(bool enable)
     {
         readonly uint version = 0x1;
-        readonly uint method  = 0x2;
+        readonly uint method = 0x2;
         readonly uint enabled = enable ? 1u : 0u;
     }
-    static readonly SuperResNvidia  SuperResEnabledNvidia   = new(true);
-    static readonly SuperResNvidia  SuperResDisabledNvidia  = new(false);
-    static readonly Guid            GUID_SUPERRES_NVIDIA    = Guid.Parse("d43ce1b3-1f4b-48ac-baee-c3c25375e6f7");
+    static readonly SuperResNvidia SuperResEnabledNvidia = new(true);
+    static readonly SuperResNvidia SuperResDisabledNvidia = new(false);
+    static readonly Guid GUID_SUPERRES_NVIDIA = Guid.Parse("d43ce1b3-1f4b-48ac-baee-c3c25375e6f7");
 
     [StructLayout(LayoutKind.Sequential)]
     struct SuperResIntel
     {
-        public IntelFunction    function;
-        public IntPtr           param;
+        public IntelFunction function;
+        public IntPtr param;
     }
     enum IntelFunction : uint
     {
-        kIntelVpeFnVersion  = 0x01,
-        kIntelVpeFnMode     = 0x20,
-		kIntelVpeFnScaling  = 0x37
+        kIntelVpeFnVersion = 0x01,
+        kIntelVpeFnMode = 0x20,
+        kIntelVpeFnScaling = 0x37
     }
-    static readonly Guid            GUID_SUPERRES_INTEL     = Guid.Parse("edd1d4b9-8659-4cbc-a4d6-9831a2163ac3");
+    static readonly Guid GUID_SUPERRES_INTEL = Guid.Parse("edd1d4b9-8659-4cbc-a4d6-9831a2163ac3");
 
     void EnableSuperRes()
     {
@@ -523,21 +520,21 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
 
     void UpdateSuperResIntel(bool enabled)
     {
-        IntPtr          paramPtr    = Marshal.AllocHGlobal(sizeof(uint));
-        SuperResIntel   intel       = new() { param = paramPtr };
-        GCHandle        handle      = GCHandle.Alloc(intel, GCHandleType.Pinned);
-            
+        IntPtr paramPtr = Marshal.AllocHGlobal(sizeof(uint));
+        SuperResIntel intel = new() { param = paramPtr };
+        GCHandle handle = GCHandle.Alloc(intel, GCHandleType.Pinned);
+
         intel.function = IntelFunction.kIntelVpeFnVersion;
         Marshal.WriteInt32(paramPtr, 3); // kIntelVpeVersion3
-        vc.VideoProcessorSetOutputExtension(vp,     GUID_SUPERRES_INTEL, (uint)sizeof(SuperResIntel), handle.AddrOfPinnedObject());
+        vc.VideoProcessorSetOutputExtension(vp, GUID_SUPERRES_INTEL, (uint)sizeof(SuperResIntel), handle.AddrOfPinnedObject());
 
         intel.function = IntelFunction.kIntelVpeFnMode;
         Marshal.WriteInt32(paramPtr, enabled ? 1 : 0); // kIntelVpeModePreproc : kIntelVpeModeNone
-        vc.VideoProcessorSetOutputExtension(vp,     GUID_SUPERRES_INTEL, (uint)sizeof(SuperResIntel), handle.AddrOfPinnedObject());
+        vc.VideoProcessorSetOutputExtension(vp, GUID_SUPERRES_INTEL, (uint)sizeof(SuperResIntel), handle.AddrOfPinnedObject());
 
         intel.function = IntelFunction.kIntelVpeFnScaling;
         Marshal.WriteInt32(paramPtr, enabled ? 2 : 0); // kIntelVpeScalingSuperResolution : kIntelVpeScalingDefault
-        vc.VideoProcessorSetStreamExtension(vp, 0,  GUID_SUPERRES_INTEL, (uint)sizeof(SuperResIntel), handle.AddrOfPinnedObject());
+        vc.VideoProcessorSetStreamExtension(vp, 0, GUID_SUPERRES_INTEL, (uint)sizeof(SuperResIntel), handle.AddrOfPinnedObject());
 
         handle.Free();
         Marshal.FreeHGlobal(paramPtr);
@@ -554,8 +551,8 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
                 return;
             }
 
-            vpRequests  = vpRequestsIn;
-            vpRequestsIn= VPRequestType.Empty;
+            vpRequests = vpRequestsIn;
+            vpRequestsIn = VPRequestType.Empty;
 
             if (vpRequests.HasFlag(VPRequestType.BackColor))
                 SetBackColor();
@@ -593,7 +590,7 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
         * TODO: Bring secondField to renderer so Render refreshes can work also with it (maybe ShowFrameX too)
         * TBR: Vortice bug with Past / Future surfaces (no support for now - only useful for deinterlace?*)
         */
-        vpsa[0].InputSurface= frame.VPIV;
+        vpsa[0].InputSurface = frame.VPIV;
         vpsa[0].OutputIndex = vpsa[0].InputFrameOrField = secondField ? 1u : 0u;
         vc.VideoProcessorBlt(vp, SwapChain.VPOV, 0, 1, vpsa);
 
@@ -604,10 +601,10 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
     }
     void D3Render(ID3D11VideoProcessorInputView srv, ID3D11VideoProcessorOutputView rtv, RawRect view, bool secondField = false)
     {
-        vc.VideoProcessorSetStreamDestRect  (vp, 0, true, view);
-        vc.VideoProcessorSetOutputTargetRect(vp,    true, view);
+        vc.VideoProcessorSetStreamDestRect(vp, 0, true, view);
+        vc.VideoProcessorSetOutputTargetRect(vp, true, view);
 
-        vpsa[0].InputSurface= srv;
+        vpsa[0].InputSurface = srv;
         vpsa[0].OutputIndex = vpsa[0].InputFrameOrField = secondField ? 1u : 0u;
         vc.VideoProcessorBlt(vp, rtv, 0, 1, vpsa);
     }
@@ -635,7 +632,7 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
     string GetDump()
     {
         string dump = "";
-        var vpCaps  = ve.VideoProcessorCaps;
+        var vpCaps = ve.VideoProcessorCaps;
 
         dump += $"=====================================================\r\n";
         dump += $"MaxInputStreams           {vpCaps.MaxInputStreams}\r\n";
@@ -658,7 +655,7 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
             dump += $"{cap,-25} {((vpCaps.InputFormatCaps & cap) != 0 ? "yes" : "no")}\r\n";
 
         dump += $"\n[Video Processor Filter Caps]\r\n";
-        
+
         foreach (VideoProcessorFilterCaps filter in D3CacheEntry.AllFilterCaps)
             if ((vpCaps.FilterCaps & filter) != 0)
             {
@@ -676,7 +673,7 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
         for (uint i = 0; i < vpCaps.RateConversionCapsCount; i++)
         {
             ve.GetVideoProcessorRateConversionCaps(i, out rcCap);
-            VideoProcessorProcessorCaps pCaps = (VideoProcessorProcessorCaps) rcCap.ProcessorCaps;
+            VideoProcessorProcessorCaps pCaps = (VideoProcessorProcessorCaps)rcCap.ProcessorCaps;
 
             dump += $"\n[Video Processor Rate Conversion Caps #{i}]\r\n";
 

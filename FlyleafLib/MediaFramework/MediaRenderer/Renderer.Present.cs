@@ -1,17 +1,15 @@
+using FlyleafLib.MediaFramework.MediaFrame;
 using SharpGen.Runtime;
 using Vortice.DXGI;
-
 using ResultCode = Vortice.DXGI.ResultCode;
-
-using FlyleafLib.MediaFramework.MediaFrame;
 
 namespace FlyleafLib.MediaFramework.MediaRenderer;
 
 public unsafe partial class Renderer
 {
-    long            renderRequestAt, lastRenderAt;
-    volatile bool   canIdle;
-    volatile bool   isIdleRunning;
+    long renderRequestAt, lastRenderAt;
+    volatile bool canIdle;
+    volatile bool isIdleRunning;
     internal object lockRenderLoops = new(); // BLOT (Q-0319): internal so SwapChain teardown can share the render lock
 
 
@@ -49,7 +47,7 @@ public unsafe partial class Renderer
     {
         canIdle = false;
         while (isIdleRunning)
-            { canIdle = false; Thread.Sleep(1); }
+        { canIdle = false; Thread.Sleep(1); }
     }
     void RenderIdleLoop()
     {
@@ -59,7 +57,7 @@ public unsafe partial class Renderer
             while (renderRequestAt <= lastRenderAt && rechecks-- > 0)
             {
                 if (!canIdle || !SwapChain.CanPresent)
-                    { rechecks = 0; break; }
+                { rechecks = 0; break; }
 
                 Thread.Sleep(5); // might not TimeBeginPeriod1 (can drop fps or slow down cancelation)
             }
@@ -106,7 +104,7 @@ public unsafe partial class Renderer
                         return true;
 
                     if (Frames.RendererFrame != null)
-                        { D3Render(Frames.RendererFrame, false); needsClear = false; }
+                    { D3Render(Frames.RendererFrame, false); needsClear = false; }
                 }
                 else
                 {
@@ -115,9 +113,9 @@ public unsafe partial class Renderer
                     if (VideoProcessor == VideoProcessors.D3D11)
                         return RenderIdle();
 
-                
+
                     if (Frames.RendererFrame != null)
-                        { FLRender(Frames.RendererFrame); needsClear = false; }
+                    { FLRender(Frames.RendererFrame); needsClear = false; }
                 }
 
                 if (needsClear)
@@ -188,7 +186,7 @@ public unsafe partial class Renderer
 
                 return true;
             }
-            
+
             lock (lockRenderLoops)
             {
                 // BLOT MODIFICATION (Q-0319): re-check under the render lock — the swap

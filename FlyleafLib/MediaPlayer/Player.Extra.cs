@@ -1,17 +1,16 @@
-﻿using System.Drawing.Imaging;
-using System.Windows;
-
-using FlyleafLib.MediaFramework.MediaDecoder;
+﻿using FlyleafLib.MediaFramework.MediaDecoder;
 using FlyleafLib.MediaFramework.MediaDemuxer;
+using System.Drawing.Imaging;
+using System.Windows;
 
 namespace FlyleafLib.MediaPlayer;
 
 unsafe partial class Player
 {
-    public bool IsOpenFileDialogOpen    { get; private set; }
+    public bool IsOpenFileDialogOpen { get; private set; }
 
 
-    public void SeekBackward()  => SeekBackward_(Config.Player.SeekOffset);
+    public void SeekBackward() => SeekBackward_(Config.Player.SeekOffset);
     public void SeekBackward2() => SeekBackward_(Config.Player.SeekOffset2);
     public void SeekBackward3() => SeekBackward_(Config.Player.SeekOffset3);
     public void SeekBackward_(long offset)
@@ -22,14 +21,14 @@ unsafe partial class Player
         long seekTs = curTime - (curTime % offset) - offset;
 
         if (Config.Player.SeekAccurate)
-            SeekAccurate(Math.Max((int) (seekTs / 10000), 0));
+            SeekAccurate(Math.Max((int)(seekTs / 10000), 0));
         else
-            Seek(Math.Max((int) (seekTs / 10000), 0), false);
+            Seek(Math.Max((int)(seekTs / 10000), 0), false);
     }
 
-    public void SeekForward()   => SeekForward_(Config.Player.SeekOffset);
-    public void SeekForward2()  => SeekForward_(Config.Player.SeekOffset2);
-    public void SeekForward3()  => SeekForward_(Config.Player.SeekOffset3);
+    public void SeekForward() => SeekForward_(Config.Player.SeekOffset);
+    public void SeekForward2() => SeekForward_(Config.Player.SeekOffset2);
+    public void SeekForward3() => SeekForward_(Config.Player.SeekOffset3);
     public void SeekForward_(long offset)
     {
         if (!CanPlay)
@@ -46,8 +45,8 @@ unsafe partial class Player
             Seek((int)(seekTs / 10000), true);
     }
 
-    public void SeekToStart()   => Seek(0);
-    public void SeekToEnd()     => Seek((int)((Duration / 10_000) - TimeSpan.FromSeconds(5).TotalMilliseconds));
+    public void SeekToStart() => Seek(0);
+    public void SeekToEnd() => Seek((int)((Duration / 10_000) - TimeSpan.FromSeconds(5).TotalMilliseconds));
 
     public void SeekToChapter(Demuxer.Chapter chapter) =>
         /* TODO
@@ -81,7 +80,7 @@ unsafe partial class Player
         System.Windows.Forms.OpenFileDialog openFileDialog = new();
         var res = openFileDialog.ShowDialog();
 
-        if(res == System.Windows.Forms.DialogResult.OK)
+        if (res == System.Windows.Forms.DialogResult.OK)
             OpenAsync(openFileDialog.FileName);
 
         Activity.IsEnabled = wasActivityEnabled;
@@ -285,13 +284,13 @@ unsafe partial class Player
         }
     }
 
-    public void SpeedUp()       => Speed += Config.Player.SpeedOffset;
-    public void SpeedUp2()      => Speed += Config.Player.SpeedOffset2;
-    public void SpeedDown()     => Speed -= Config.Player.SpeedOffset;
-    public void SpeedDown2()    => Speed -= Config.Player.SpeedOffset2;
+    public void SpeedUp() => Speed += Config.Player.SpeedOffset;
+    public void SpeedUp2() => Speed += Config.Player.SpeedOffset2;
+    public void SpeedDown() => Speed -= Config.Player.SpeedOffset;
+    public void SpeedDown2() => Speed -= Config.Player.SpeedOffset2;
 
-    public void FullScreen()    => Host?.Player_SetFullScreen(true);
-    public void NormalScreen()  => Host?.Player_SetFullScreen(false);
+    public void FullScreen() => Host?.Player_SetFullScreen(true);
+    public void NormalScreen() => Host?.Player_SetFullScreen(false);
     public void ToggleFullScreen()
     {
         if (Host == null)
@@ -318,7 +317,8 @@ unsafe partial class Player
             string filename = GetValidFileName(string.IsNullOrEmpty(Playlist.Selected.Title) ? "Record" : Playlist.Selected.Title) + $"_{new TimeSpan(CurTime):hhmmss}." + decoder.Extension;
             filename = FindNextAvailableFile(Path.Combine(Config.Player.FolderRecordings, filename));
             StartRecording(ref filename, false);
-        } catch { }
+        }
+        catch { }
     }
 
     /// <summary>
@@ -378,15 +378,16 @@ unsafe partial class Player
                 // TBR: if frame is specified we don't know the frame's number
                 filename = GetValidFileName(string.IsNullOrEmpty(Playlist.Selected.Title) ? "Snapshot" : Playlist.Selected.Title) + $"_{VideoDecoder.GetFrameNumber(CurTime).ToString()}.{Config.Player.SnapshotFormat}";
                 filename = FindNextAvailableFile(Path.Combine(Config.Player.FolderSnapshots, filename));
-            } catch { return; }
+            }
+            catch { return; }
         }
 
         string ext = GetUrlExtention(filename);
 
         var imageFormat = ext switch
         {
-            "bmp"           => ImageFormat.Bmp,
-            "png"           => ImageFormat.Png,
+            "bmp" => ImageFormat.Bmp,
+            "png" => ImageFormat.Png,
             "jpg" or "jpeg" => ImageFormat.Jpeg,
             _ => throw new($"Invalid snapshot extention '{ext}' (valid .bmp, .png, .jpeg, .jpg"),
         };
