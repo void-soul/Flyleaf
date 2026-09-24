@@ -11,14 +11,14 @@ namespace FlyleafLib.MediaFramework.MediaRenderer;
 
 internal static partial class ShaderCompiler
 {
-    const int               MAX_CACHE_SIZE  = 64;
-    const string            MAIN            = "main";
-    const string            LOG_PREFIX      = "[Shader] ";
-    static readonly string  SHADERVER       = Environment.OSVersion.Version.Major >= 10 ? "_5_0" : "_4_0_level_9_3";
-    static readonly string  PSVER           = $"ps{SHADERVER}";
-    static readonly string  VSVER           = $"vs{SHADERVER}";
-    internal static Blob    VSBlob          = Compile(VS, false);
-    internal static Blob    VSSimpleBlob    = Compile(VSSimple, false);
+    const int MAX_CACHE_SIZE = 64;
+    const string MAIN = "main";
+    const string LOG_PREFIX = "[Shader] ";
+    static readonly string SHADERVER = Environment.OSVersion.Version.Major >= 10 ? "_5_0" : "_4_0_level_9_3";
+    static readonly string PSVER = $"ps{SHADERVER}";
+    static readonly string VSVER = $"vs{SHADERVER}";
+    internal static Blob VSBlob = Compile(VS, false);
+    internal static Blob VSSimpleBlob = Compile(VSSimple, false);
 
     class BlobWrapper { public Blob blob; } // For locking per Blob (before creation)
     static readonly Dictionary<string, BlobWrapper> cache = [];
@@ -57,13 +57,13 @@ internal static partial class ShaderCompiler
 
         // PS_HEADER + hlslSample + PS_FOOTER (Max 13KB)
         Debug.Assert(PS_HEADER.Length + PS_FOOTER.Length + Encoding.UTF8.GetMaxByteCount(hlslSample.Length) < 13_000);
-        byte[] bufferPool   = ArrayPool<byte>.Shared.Rent(13 * 1024);
-        Span<byte> buffer   = bufferPool;
+        byte[] bufferPool = ArrayPool<byte>.Shared.Rent(13 * 1024);
+        Span<byte> buffer = bufferPool;
         PS_HEADER.CopyTo(buffer);
-        int offset          = PS_HEADER.Length;
-        offset             += Encoding.UTF8.GetBytes(hlslSample, buffer[offset..]);
+        int offset = PS_HEADER.Length;
+        offset += Encoding.UTF8.GetBytes(hlslSample, buffer[offset..]);
         PS_FOOTER.CopyTo(buffer[offset..]);
-        offset             += PS_FOOTER.Length;
+        offset += PS_FOOTER.Length;
         bw.blob = Compile(buffer[..offset], true, defines);
         ArrayPool<byte>.Shared.Return(bufferPool);
 
@@ -82,7 +82,7 @@ internal static partial class ShaderCompiler
             // NOTE: requires NULL termination (+1)
             definesMacro = new ShaderMacro[defines.Count + 1];
 
-            for(int i = 0; i < defines.Count; i++)
+            for (int i = 0; i < defines.Count; i++)
                 definesMacro[i].Name = defines[i];
         }
 
@@ -108,7 +108,7 @@ internal static partial class ShaderCompiler
     }
 
     static void LogError(string msg) => Engine.Log.Error($"{LOG_PREFIX}{msg}");
-    static void LogInfo (string msg) => Engine.Log.Info ($"{LOG_PREFIX}{msg}");
+    static void LogInfo(string msg) => Engine.Log.Info($"{LOG_PREFIX}{msg}");
     static void LogDebug(string msg) => Engine.Log.Debug($"{LOG_PREFIX}{msg}");
     static void LogTrace(string msg) => Engine.Log.Trace($"{LOG_PREFIX}{msg}");
 }

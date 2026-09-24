@@ -2,9 +2,9 @@
 
 public class ExternalVideoStream : ExternalStream
 {
-    public double   FPS             { get; set; }
-    public int      Height          { get; set; }
-    public int      Width           { get; set; }
+    public double FPS { get; set; }
+    public int Height { get; set; }
+    public int Width { get; set; }
 
-    public bool     HasAudio        { get; set; }
+    public bool HasAudio { get; set; }
 }

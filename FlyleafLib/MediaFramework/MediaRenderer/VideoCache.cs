@@ -6,16 +6,16 @@ namespace FlyleafLib.MediaFramework.MediaRenderer;
 
 public class VideoCache
 {
-    public long         Count       { get { lock (this) return Last == null ? 0 : Last.Id + 1 - First.Id; } }
+    public long Count { get { lock (this) return Last == null ? 0 : Last.Id + 1 - First.Id; } }
     //public long         CountFront  => Current == null ? 0 : Last.Id - Current.Id;
-    public bool         IsEmpty     => Count == 0;
-    public VideoFrame   Next        => Current?.Next;
+    public bool IsEmpty => Count == 0;
+    public VideoFrame Next => Current?.Next;
 
-    readonly DecoderConfig       dcfg;
+    readonly DecoderConfig dcfg;
     internal VideoFrame RendererFrame, First, Last, Current;
-    long                curId;
-    bool                isCurrentNext;
-    bool                disposeRenderFrame;
+    long curId;
+    bool isCurrentNext;
+    bool disposeRenderFrame;
 
     internal VideoCache(DecoderConfig dcfg)
         => this.dcfg = dcfg;
@@ -34,9 +34,9 @@ public class VideoCache
             }
             else
             {
-                frame.Prev  = Last;
-                Last.Next   = frame;
-                Last        = frame;
+                frame.Prev = Last;
+                Last.Next = frame;
+                Last = frame;
 
                 if (Current == null || used)
                 {
@@ -44,7 +44,7 @@ public class VideoCache
                     Current = Last;
 
                     while (Current.Id - First.Id > dcfg.MaxVideoFramesPrev)
-                        { Shrink(); if (First == null) break; }
+                    { Shrink(); if (First == null) break; }
 
                     //if (First != null) Log($"E: [{First.Id} {Last.Id}] {(Current != null ? Current.Id : "-")} *");
                 }
@@ -83,11 +83,11 @@ public class VideoCache
                 return true;
             }
 
-            var id  = Current.Id;   // we might dispose/null it during shrink
+            var id = Current.Id;   // we might dispose/null it during shrink
             Current = Current.Next;
 
             while (id - First.Id > dcfg.MaxVideoFramesPrev - 1)
-                { Shrink(); if (First == null) break; }
+            { Shrink(); if (First == null) break; }
 
             //if (First != null) Log($"D: [{First.Id} {Last.Id}] {(Current != null ? Current.Id : "-")}");
 
@@ -104,15 +104,15 @@ public class VideoCache
 
     void Shrink()
     {
-        var first   = First;
-        First       = First.Next;
+        var first = First;
+        First = First.Next;
 
         if (First == null)
             Last = null;
         else
             First.Prev = null;
 
-        if (first  != RendererFrame)
+        if (first != RendererFrame)
             first.Dispose();
         else
             disposeRenderFrame = true;

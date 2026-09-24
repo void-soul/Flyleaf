@@ -15,7 +15,7 @@ public class Data : NotifyPropertyChanged
     /// Whether the input has data and it is configured
     /// </summary>
     public bool IsOpened { get => isOpened; internal set => Set(ref _IsOpened, value); }
-    internal bool   _IsOpened, isOpened;
+    internal bool _IsOpened, isOpened;
 
     readonly Action uiAction;
     readonly Player player;

@@ -37,9 +37,9 @@ namespace FlyleafLib.Controls.WPF
             _4k
         }
 
-		public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            int videoHeight = (int) value;
+            int videoHeight = (int)value;
 
             if (videoHeight > 1080)
                 return Qualities._4k;
@@ -50,9 +50,9 @@ namespace FlyleafLib.Controls.WPF
             else
                 return Qualities.Low;
         }
-		public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotImplementedException();
-	}
+    }
 
     public class VolumeToLevelsConverter : IValueConverter
     {
@@ -64,9 +64,9 @@ namespace FlyleafLib.Controls.WPF
             High
         }
 
-		public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            int volume = (int) value;
+            int volume = (int)value;
 
             if (volume == 0)
                 return Volumes.Mute;
@@ -77,13 +77,13 @@ namespace FlyleafLib.Controls.WPF
             else
                 return Volumes.Low;
         }
-		public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotImplementedException();
-	}
+    }
 
     public class CheckNullConverter : IMultiValueConverter
     {
-		public object Convert(object[] value, Type targetType, object parameter, CultureInfo culture)
+        public object Convert(object[] value, Type targetType, object parameter, CultureInfo culture)
         {
             if (value == null)
                 return true;
@@ -96,9 +96,9 @@ namespace FlyleafLib.Controls.WPF
 
             return !((IDictionary)value[0]).Contains(value[1]);
         }
-		public object[] ConvertBack(object value, Type[] targetType, object parameter, CultureInfo culture)
+        public object[] ConvertBack(object value, Type[] targetType, object parameter, CultureInfo culture)
             => throw new NotImplementedException();
-	}
+    }
 
     public class BooleanAllConverter : IMultiValueConverter
     {
@@ -128,7 +128,7 @@ namespace FlyleafLib.Controls.WPF
     }
     public class InvertBooleanConverter : BooleanConverter<bool>
     {
-        public InvertBooleanConverter() : base(false, true) {}
+        public InvertBooleanConverter() : base(false, true) { }
     }
 
     [ValueConversion(typeof(double), typeof(double), ParameterType = typeof(Orientation))]
@@ -190,7 +190,7 @@ namespace FlyleafLib.Controls.WPF
 
     public class GetDictionaryItemConverter : IMultiValueConverter
     {
-		public object Convert(object[] value, Type targetType, object parameter, CultureInfo culture)
+        public object Convert(object[] value, Type targetType, object parameter, CultureInfo culture)
         {
             if (value == null)
                 return null;
@@ -203,9 +203,9 @@ namespace FlyleafLib.Controls.WPF
 
             return ((IDictionary)value[0])[value[1]];
         }
-		public object[] ConvertBack(object value, Type[] targetType, object parameter, CultureInfo culture)
+        public object[] ConvertBack(object value, Type[] targetType, object parameter, CultureInfo culture)
             => throw new NotImplementedException();
-	}
+    }
 
     public class MarginConverter : IValueConverter
     {
@@ -275,7 +275,7 @@ namespace FlyleafLib.Controls.WPF
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            try { return ColorConverter.ConvertFromString("#" + value.ToString()); } catch(Exception) { }
+            try { return ColorConverter.ConvertFromString("#" + value.ToString()); } catch (Exception) { }
 
             return Binding.DoNothing;
         }

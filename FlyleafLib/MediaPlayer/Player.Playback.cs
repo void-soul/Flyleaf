@@ -46,11 +46,11 @@ partial class Player
 
         Thread t = new(PlayThread)
         {
-            #if DEBUG
-            Name            = $"[#{PlayerId}] Playback",
-            #endif
-            Priority        = Config.Player.ThreadPriority,
-            IsBackground    = true
+#if DEBUG
+            Name = $"[#{PlayerId}] Playback",
+#endif
+            Priority = Config.Player.ThreadPriority,
+            IsBackground = true
         };
 
         t.Start();
@@ -63,9 +63,9 @@ partial class Player
             Engine.TimeBeginPeriod1();
             Engine.ThreadExecutionStateBegin();
 
-            onBufferingStarted   = 0;
+            onBufferingStarted = 0;
             onBufferingCompleted = 0;
-            requiresBuffering    = true;
+            requiresBuffering = true;
 
             if (lastError != null)
             {
@@ -365,21 +365,21 @@ partial class Player
 
 public class PlaybackStoppedArgs : EventArgs
 {
-    public string   Error       { get; }
-    public bool     Success     { get; }
+    public string Error { get; }
+    public bool Success { get; }
 
     public PlaybackStoppedArgs(string error)
     {
-        Error   = error;
+        Error = error;
         Success = Error == null;
     }
 }
 
 class SeekData
 {
-    public int  ms;
+    public int ms;
     public bool forward;
     public bool accurate;
     public SeekData(int ms, bool forward, bool accurate)
-        { this.ms = ms; this.forward = forward && !accurate; this.accurate = accurate; }
+    { this.ms = ms; this.forward = forward && !accurate; this.accurate = accurate; }
 }

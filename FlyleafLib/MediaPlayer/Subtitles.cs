@@ -9,24 +9,24 @@ public class Subtitles : NotifyPropertyChanged
     /// Embedded Streams
     /// </summary>
     public ObservableCollection<SubtitlesStream>
-                    Streams         => decoder?.VideoDemuxer.SubtitlesStreams;
+                    Streams => decoder?.VideoDemuxer.SubtitlesStreams;
 
-    public int      StreamIndex     { get => streamIndex;       internal set => Set(ref _StreamIndex, value); }
+    public int StreamIndex { get => streamIndex; internal set => Set(ref _StreamIndex, value); }
     int _StreamIndex, streamIndex = -1;
 
     /// <summary>
     /// Whether the input has subtitles and it is configured
     /// </summary>
-    public bool     IsOpened        { get => isOpened;     internal set => Set(ref _IsOpened, value); }
-    internal bool   _IsOpened, isOpened;
+    public bool IsOpened { get => isOpened; internal set => Set(ref _IsOpened, value); }
+    internal bool _IsOpened, isOpened;
 
-    public string   Codec           { get => codec;        internal set => Set(ref _Codec, value); }
+    public string Codec { get => codec; internal set => Set(ref _Codec, value); }
     internal string _Codec, codec;
 
     /// <summary>
     /// Subtitles Text (updates dynamically while playing based on the duration that it should be displayed)
     /// </summary>
-    public string   SubsText        { get => subsText;     internal set => Set(ref _SubsText,  value); }
+    public string SubsText { get => subsText; internal set => Set(ref _SubsText, value); }
     internal string _SubsText = "", subsText = "";
     public void ClearSubsText() { subsText = ""; if (_SubsText != "") UI(() => SubsText = subsText); }
 
@@ -43,17 +43,17 @@ public class Subtitles : NotifyPropertyChanged
         uiAction = () =>
         {
             StreamIndex = streamIndex;
-            IsOpened    = isOpened;
-            Codec       = codec;
-            SubsText    = subsText;
+            IsOpened = isOpened;
+            Codec = codec;
+            SubsText = subsText;
         };
     }
     internal void Reset()
     {
         streamIndex = -1;
-        codec       = null;
-        isOpened    = false;
-        subsText    = "";
+        codec = null;
+        isOpened = false;
+        subsText = "";
         player.sFramePrev = null;
         player.Renderer?.SubsDispose();
 
@@ -64,9 +64,9 @@ public class Subtitles : NotifyPropertyChanged
         if (decoder.SubtitlesStream == null) { Reset(); return; }
 
         streamIndex = decoder.SubtitlesStream.StreamIndex;
-        codec       = decoder.SubtitlesStream.Codec;
-        isOpened    =!decoder.SubtitlesDecoder.Disposed;
-        subsText    = "";
+        codec = decoder.SubtitlesStream.Codec;
+        isOpened = !decoder.SubtitlesDecoder.Disposed;
+        subsText = "";
         player.sFramePrev = null;
         player.Renderer.SubsDispose();
 
@@ -78,7 +78,7 @@ public class Subtitles : NotifyPropertyChanged
             return;
 
         decoder.OpenSuggestedSubtitles();
-        player.ReSync(decoder.SubtitlesStream, (int) (player.CurTime / 10000), true);
+        player.ReSync(decoder.SubtitlesStream, (int)(player.CurTime / 10000), true);
 
         Refresh();
         player.UIAll();

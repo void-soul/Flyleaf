@@ -22,10 +22,10 @@ public struct SubStyle
     public SubStyle(int from, int len, Color value) : this(SubStyles.COLOR, from, len, value) { }
     public SubStyle(SubStyles style, int from = -1, int len = -1, Color? value = null)
     {
-        this.style  = style;
-        this.value  = value == null ? Color.White : (Color)value;
-        this.from   = from;
-        this.len    = len;
+        this.style = style;
+        this.value = value == null ? Color.White : (Color)value;
+        this.from = from;
+        this.len = len;
     }
 }
 
@@ -56,11 +56,11 @@ public static class ParseSubtitles
         string sout = "";
         styles = [];
 
-        SubStyle bold       = new(SubStyles.BOLD);
-        SubStyle italic     = new(SubStyles.ITALIC);
-        SubStyle underline  = new(SubStyles.UNDERLINE);
-        SubStyle strikeout  = new(SubStyles.STRIKEOUT);
-        SubStyle color      = new(SubStyles.COLOR);
+        SubStyle bold = new(SubStyles.BOLD);
+        SubStyle italic = new(SubStyles.ITALIC);
+        SubStyle underline = new(SubStyles.UNDERLINE);
+        SubStyle strikeout = new(SubStyles.STRIKEOUT);
+        SubStyle color = new(SubStyles.COLOR);
 
         //SubStyle fontname      = new SubStyle(SubStyles.FONTNAME);
         //SubStyle fontsize      = new SubStyle(SubStyles.FONTSIZE);

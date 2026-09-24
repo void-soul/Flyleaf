@@ -7,18 +7,18 @@ namespace FlyleafLib.Plugins;
 public abstract class PluginBase : PluginType, IPlugin
 {
     public ObservableDictionary<string, string>
-                                    Options         => Config?.Plugins[Name];
-    public Config                   Config          => Handler.Config;
+                                    Options => Config?.Plugins[Name];
+    public Config Config => Handler.Config;
 
-    public Playlist                 Playlist        => Handler.Playlist;
-    public PlaylistItem             Selected        => Handler.Playlist.Selected;
+    public Playlist Playlist => Handler.Playlist;
+    public PlaylistItem Selected => Handler.Playlist.Selected;
 
-    public DecoderContext           decoder         => (DecoderContext) Handler;
+    public DecoderContext decoder => (DecoderContext)Handler;
 
-    public PluginHandler            Handler         { get; internal set; }
-    public LogHandler               Log             { get; internal set; }
-    public bool                     Disposed        { get; protected set;} = true;
-    public int                      Priority        { get; set; } = 1000;
+    public PluginHandler Handler { get; internal set; }
+    public LogHandler Log { get; internal set; }
+    public bool Disposed { get; protected set; } = true;
+    public int Priority { get; set; } = 1000;
 
     public virtual void OnLoaded() { }
     public virtual void OnInitializing() { }
@@ -65,14 +65,14 @@ public abstract class PluginBase : PluginType, IPlugin
 }
 public class PluginType
 {
-    public Type                     Type            { get; internal set; }
-    public string                   Name            { get; internal set; }
-    public Version                  Version         { get; internal set; }
+    public Type Type { get; internal set; }
+    public string Name { get; internal set; }
+    public Version Version { get; internal set; }
 }
 public class OpenResults
 {
-    public string   Error;
-    public bool     Success => Error == null;
+    public string Error;
+    public bool Success => Error == null;
 
     public OpenResults() { }
     public OpenResults(string error) => Error = error;
@@ -86,10 +86,10 @@ public class OpenSubtitlesResults : OpenResults
 
 public interface IPlugin : IDisposable
 {
-    string          Name        { get; }
-    Version         Version     { get; }
-    PluginHandler   Handler     { get; }
-    int             Priority    { get; }
+    string Name { get; }
+    Version Version { get; }
+    PluginHandler Handler { get; }
+    int Priority { get; }
 
     void OnLoaded();
     void OnInitializing();
@@ -108,8 +108,8 @@ public interface IPlugin : IDisposable
 public interface IOpen : IPlugin
 {
     bool CanOpen();
-    OpenResults     Open();
-    OpenResults     OpenItem();
+    OpenResults Open();
+    OpenResults OpenItem();
 }
 public interface IOpenSubtitles : IPlugin
 {

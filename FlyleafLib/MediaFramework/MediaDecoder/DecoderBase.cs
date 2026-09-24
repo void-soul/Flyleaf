@@ -5,25 +5,25 @@ namespace FlyleafLib.MediaFramework.MediaDecoder;
 
 public abstract unsafe class DecoderBase : RunThreadBase
 {
-    public MediaType                Type            { get; protected set; }
+    public MediaType Type { get; protected set; }
 
-    public bool                     OnVideoDemuxer  => demuxer?.Type == MediaType.Video;
-    public Demuxer                  Demuxer         => demuxer;
-    public StreamBase               Stream          { get; protected set; }
-    public AVCodecContext*          CodecCtx        => codecCtx;
-    public Action<DecoderBase>      CodecChanged    { get; set; }
-    public Config                   Config          { get; protected set; }
-    public double                   Speed           { get => speed; set { if (Disposed) { speed = value; return; } if (speed != value) OnSpeedChanged(value); } }
+    public bool OnVideoDemuxer => demuxer?.Type == MediaType.Video;
+    public Demuxer Demuxer => demuxer;
+    public StreamBase Stream { get; protected set; }
+    public AVCodecContext* CodecCtx => codecCtx;
+    public Action<DecoderBase> CodecChanged { get; set; }
+    public Config Config { get; protected set; }
+    public double Speed { get => speed; set { if (Disposed) { speed = value; return; } if (speed != value) OnSpeedChanged(value); } }
     protected double speed = 1, oldSpeed = 1;
     protected virtual void OnSpeedChanged(double value) { }
 
-    internal bool               codecChanged;
-    internal bool               filledFromCodec;
-    internal AVFrame*           frame;
-    protected AVCodecContext*   codecCtx;
-    internal  object            lockCodecCtx    = new();
+    internal bool codecChanged;
+    internal bool filledFromCodec;
+    internal AVFrame* frame;
+    protected AVCodecContext* codecCtx;
+    internal object lockCodecCtx = new();
 
-    protected Demuxer           demuxer;
+    protected Demuxer demuxer;
 
     public DecoderBase(Config config, int uniqueId = -1) : base(uniqueId)
     {
@@ -38,7 +38,7 @@ public abstract unsafe class DecoderBase : RunThreadBase
         else if (this is DataDecoder)
             Type = MediaType.Data;
 
-        threadName = $"Decoder: {Type, 5}";
+        threadName = $"Decoder: {Type,5}";
     }
 
     public bool Open(StreamBase stream)
@@ -62,8 +62,8 @@ public abstract unsafe class DecoderBase : RunThreadBase
                 return false;
             }
 
-            Disposed= false;
-            Stream  = stream;
+            Disposed = false;
+            Stream = stream;
             demuxer = stream.Demuxer;
 
             if (!Setup())
@@ -125,18 +125,18 @@ public abstract unsafe class DecoderBase : RunThreadBase
                 fixed (AVFrame** ptr = &frame) av_frame_free(ptr);
                 frame = null;
             }
-                
+
 
             if (codecCtx != null)
             {
                 fixed (AVCodecContext** ptr = &codecCtx) avcodec_free_context(ptr);
                 codecCtx = null;
             }
-            
-            demuxer         = null;
-            Stream          = null;
-            Status          = Status.Stopped;
-            Disposed        = true;
+
+            demuxer = null;
+            Stream = null;
+            Status = Status.Stopped;
+            Disposed = true;
 
             if (CanDebug) Log.Debug("Disposed");
         }

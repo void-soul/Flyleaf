@@ -3,20 +3,20 @@
 public static class Logger
 {
     public static bool CanError => Engine.Config.LogLevel >= LogLevel.Error;
-    public static bool CanWarn  => Engine.Config.LogLevel >= LogLevel.Warn;
-    public static bool CanInfo  => Engine.Config.LogLevel >= LogLevel.Info;
+    public static bool CanWarn => Engine.Config.LogLevel >= LogLevel.Warn;
+    public static bool CanInfo => Engine.Config.LogLevel >= LogLevel.Info;
     public static bool CanDebug => Engine.Config.LogLevel >= LogLevel.Debug;
     public static bool CanTrace => Engine.Config.LogLevel >= LogLevel.Trace;
 
 
-    public   static Action<string> CustomOutput = DevNullPtr;
-    internal static Action<string> Output       = DevNullPtr;
+    public static Action<string> CustomOutput = DevNullPtr;
+    internal static Action<string> Output = DevNullPtr;
 
     static readonly ConcurrentQueue<byte[]>
                         fileData = [];
-    static bool         fileTaskRunning;
-    static FileStream   fileStream;
-    static readonly object       lockFileStream = new();
+    static bool fileTaskRunning;
+    static FileStream fileStream;
+    static readonly object lockFileStream = new();
     static readonly Dictionary<LogLevel, string>
                         logLevels = [];
 
@@ -77,7 +77,7 @@ public static class Logger
                     fileStream = new(output, FileMode.Append, FileAccess.Write);
                     Output = FilePtr;
                 }
-                    
+
                 else if (Engine.Config.LogRollMaxFiles > 0 && Engine.Config.LogRollMaxFileSize > 0)
                 {
                     RollLogFiles(); // If we have rolling log enables and do not append, then we need to roll the log files first
@@ -203,19 +203,19 @@ public class LogHandler(string prefix = "")
 {
     public string Prefix = prefix;
 
-    public void Error   (string msg)    => Log($"{Prefix}{msg}", LogLevel.Error);
-    public void Info    (string msg)    => Log($"{Prefix}{msg}", LogLevel.Info);
-    public void Warn    (string msg)    => Log($"{Prefix}{msg}", LogLevel.Warn);
-    public void Debug   (string msg)    => Log($"{Prefix}{msg}", LogLevel.Debug);
-    public void Trace   (string msg)    => Log($"{Prefix}{msg}", LogLevel.Trace);
+    public void Error(string msg) => Log($"{Prefix}{msg}", LogLevel.Error);
+    public void Info(string msg) => Log($"{Prefix}{msg}", LogLevel.Info);
+    public void Warn(string msg) => Log($"{Prefix}{msg}", LogLevel.Warn);
+    public void Debug(string msg) => Log($"{Prefix}{msg}", LogLevel.Debug);
+    public void Trace(string msg) => Log($"{Prefix}{msg}", LogLevel.Trace);
 }
 
 public enum LogLevel
 {
-    Quiet   = 0x00,
-    Error   = 0x10,
-    Warn    = 0x20,
-    Info    = 0x30,
-    Debug   = 0x40,
-    Trace   = 0x50
+    Quiet = 0x00,
+    Error = 0x10,
+    Warn = 0x20,
+    Info = 0x30,
+    Debug = 0x40,
+    Trace = 0x50
 }

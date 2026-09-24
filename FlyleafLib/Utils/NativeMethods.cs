@@ -87,10 +87,10 @@ public static partial class Utils
         [Flags]
         public enum EXECUTION_STATE : uint
         {
-            ES_AWAYMODE_REQUIRED    = 0x00000040,
-            ES_CONTINUOUS           = 0x80000000,
-            ES_DISPLAY_REQUIRED     = 0x00000002,
-            ES_SYSTEM_REQUIRED      = 0x00000001
+            ES_AWAYMODE_REQUIRED = 0x00000040,
+            ES_CONTINUOUS = 0x80000000,
+            ES_DISPLAY_REQUIRED = 0x00000002,
+            ES_SYSTEM_REQUIRED = 0x00000001
         }
 
         [DllImport("gdi32.dll")]
@@ -269,10 +269,10 @@ public static partial class Utils
 
         public enum WndProcMessages : uint
         {
-            WM_MOVE         = 0x0003,
-            WM_SIZE         = 0x0005,
-            WM_DISPLAYCHANGE= 0x007E,
-            WM_NCDESTROY    = 0x0082
+            WM_MOVE = 0x0003,
+            WM_SIZE = 0x0005,
+            WM_DISPLAYCHANGE = 0x007E,
+            WM_NCDESTROY = 0x0082
         }
 
         //public delegate nint WndProcDelegate(nint hWnd, WndProcMessages msg, nint wParam, nint lParam);
@@ -292,9 +292,9 @@ public static partial class Utils
         [Flags]
         public enum MonitorOptions : uint
         {
-            MONITOR_DEFAULTTONULL   = 0x00000000,
-            MONITOR_DEFAULTTOPRIMARY= 0x00000001,
-            MONITOR_DEFAULTTONEAREST= 0x00000002
+            MONITOR_DEFAULTTONULL = 0x00000000,
+            MONITOR_DEFAULTTOPRIMARY = 0x00000001,
+            MONITOR_DEFAULTTONEAREST = 0x00000002
         }
 
         [DllImport("shcore.dll")]
@@ -303,7 +303,7 @@ public static partial class Utils
         private const int MDT_EFFECTIVE_DPI = 0;
         public static (double dpiX, double dpiY) GetDpiAtPoint(Point point)
         {
-            IntPtr monitor = MonitorFromPoint(point,  MonitorOptions.MONITOR_DEFAULTTONEAREST);
+            IntPtr monitor = MonitorFromPoint(point, MonitorOptions.MONITOR_DEFAULTTONEAREST);
 
             if (monitor != IntPtr.Zero && GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, out uint dpiX, out uint dpiY) == 0)
                 return (dpiX / 96.0, dpiY / 96.0);

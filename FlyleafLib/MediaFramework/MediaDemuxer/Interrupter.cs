@@ -4,10 +4,10 @@ namespace FlyleafLib.MediaFramework.MediaDemuxer;
 
 public unsafe class Interrupter
 {
-    public int          ForceInterrupt  { get; set; }
-    public Requester    Requester       { get; private set; }
-    public int          Interrupted     { get; private set; }
-    public bool         Timedout        { get; private set; }
+    public int ForceInterrupt { get; set; }
+    public Requester Requester { get; private set; }
+    public int Interrupted { get; private set; }
+    public bool Timedout { get; private set; }
 
     readonly Demuxer demuxer;
     readonly Stopwatch sw = new();
@@ -47,7 +47,7 @@ public unsafe class Interrupter
 
             if (CanWarn) demuxer.Log.Warn($"{Requester} Timeout !!!! {sw.ElapsedMilliseconds} ms");
 
-            Timedout    = true;
+            Timedout = true;
             Interrupted = 1;
             demuxer.OnTimedOut();
 
@@ -69,55 +69,55 @@ public unsafe class Interrupter
 
     public Interrupter(Demuxer demuxer)
     {
-        this.demuxer    = demuxer;
-        interruptClbk   = ShouldInterrupt;
+        this.demuxer = demuxer;
+        interruptClbk = ShouldInterrupt;
     }
 
     public void ReadRequest()
     {
-        Requester   = Requester.Read;
+        Requester = Requester.Read;
 
         if (!demuxer.Config.AllowTimeouts)
             return;
 
-        Timedout    = false;
-        curTimeoutMs= demuxer.IsLive ? demuxer.Config.readLiveTimeoutMs: demuxer.Config.readTimeoutMs;
+        Timedout = false;
+        curTimeoutMs = demuxer.IsLive ? demuxer.Config.readLiveTimeoutMs : demuxer.Config.readTimeoutMs;
         sw.Restart();
     }
 
     public void SeekRequest()
     {
-        Requester   = Requester.Seek;
+        Requester = Requester.Seek;
 
         if (!demuxer.Config.AllowTimeouts)
             return;
 
-        Timedout    = false;
-        curTimeoutMs= demuxer.Config.seekTimeoutMs;
+        Timedout = false;
+        curTimeoutMs = demuxer.Config.seekTimeoutMs;
         sw.Restart();
     }
 
     public void OpenRequest()
     {
-        Requester   = Requester.Open;
+        Requester = Requester.Open;
 
         if (!demuxer.Config.AllowTimeouts)
             return;
 
-        Timedout    = false;
-        curTimeoutMs= demuxer.Config.openTimeoutMs;
+        Timedout = false;
+        curTimeoutMs = demuxer.Config.openTimeoutMs;
         sw.Restart();
     }
 
     public void CloseRequest()
     {
-        Requester   = Requester.Close;
+        Requester = Requester.Close;
 
         if (!demuxer.Config.AllowTimeouts)
             return;
 
-        Timedout    = false;
-        curTimeoutMs= demuxer.Config.closeTimeoutMs;
+        Timedout = false;
+        curTimeoutMs = demuxer.Config.closeTimeoutMs;
         sw.Restart();
     }
 }

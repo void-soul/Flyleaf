@@ -2,7 +2,7 @@
 
 public class AudioFrame : FrameBase
 {
-    public IntPtr   dataPtr;
-    public int      dataLen;
-    public double   speed = 1;
+    public IntPtr dataPtr;
+    public int dataLen;
+    public double speed = 1;
 }

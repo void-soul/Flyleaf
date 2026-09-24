@@ -4,16 +4,16 @@ namespace FlyleafLib.MediaFramework.MediaPlaylist;
 
 public class M3UPlaylistItem
 {
-    public long     Duration    { get; set; }
-    public string   Title       { get; set; }
-    public string   OriginalTitle
-                                { get; set; }
-    public string   Url         { get; set; }
-    public string   UserAgent   { get; set; }
-    public string   Referrer    { get; set; }
-    public bool     GeoBlocked  { get; set; }
-    public bool     Not_24_7    { get; set; }
-    public int      Height      { get; set; }
+    public long Duration { get; set; }
+    public string Title { get; set; }
+    public string OriginalTitle
+    { get; set; }
+    public string Url { get; set; }
+    public string UserAgent { get; set; }
+    public string Referrer { get; set; }
+    public bool GeoBlocked { get; set; }
+    public bool Not_24_7 { get; set; }
+    public int Height { get; set; }
 
     public Dictionary<string, string> Tags { get; set; } = [];
 }

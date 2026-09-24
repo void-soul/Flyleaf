@@ -13,13 +13,13 @@ public unsafe partial class Renderer
         {
             ucfg.flFiltersFilled = true;
 
-            foreach(var filterSpec in FLFilter.FLFilterSpecs)
+            foreach (var filterSpec in FLFilter.FLFilterSpecs)
             {
                 if (ucfg.FLFilters.TryGetValue(filterSpec.Filter, out var userFilter))
                 {
                     userFilter.Initialize(this);
                     if (userFilter.Value != userFilter.Default)
-                        { ucfg.hasFLFilters = true; FLSetFilter(userFilter); }
+                    { ucfg.hasFLFilters = true; FLSetFilter(userFilter); }
                 }
                 else
                 {
@@ -31,9 +31,9 @@ public unsafe partial class Renderer
         else
         {   // NOTE: psData will not be reset on each setup so make sure we set all
             ucfg.hasFLFilters = false;
-            foreach(var userFilter in ucfg.FLFilters.Values)
+            foreach (var userFilter in ucfg.FLFilters.Values)
                 if (userFilter.Value != userFilter.Default)
-                    { ucfg.hasFLFilters = true; FLSetFilter(userFilter); }
+                { ucfg.hasFLFilters = true; FLSetFilter(userFilter); }
         }
     }
     void FLFiltersSync()
@@ -43,7 +43,7 @@ public unsafe partial class Renderer
 
         ucfg.hasFLFilters = false;
 
-        foreach(var flFilter in ucfg.FLFilters.Values)
+        foreach (var flFilter in ucfg.FLFilters.Values)
             if (ucfg.D3Filters.TryGetValue(ToVideoProcessorFilter(flFilter.Filter), out var d3Filter))
             {
                 flFilter.Value = (int)Math.Round(Scale(d3Filter.Value, d3Filter.Minimum, d3Filter.Maximum, flFilter.Minimum, flFilter.Maximum));
@@ -62,19 +62,19 @@ public unsafe partial class Renderer
         switch (cfgFilter.Filter)
         {
             case FLFilters.Brightness:
-                psData.Brightness   = value;
+                psData.Brightness = value;
                 break;
 
             case FLFilters.Contrast:
-                psData.Contrast     = value;
+                psData.Contrast = value;
                 break;
 
             case FLFilters.Hue:
-                psData.Hue          = value;
+                psData.Hue = value;
                 break;
 
             case FLFilters.Saturation:
-                psData.Saturation   = value;
+                psData.Saturation = value;
                 break;
         }
 
@@ -106,10 +106,10 @@ public unsafe partial class Renderer
 
     static VideoProcessorFilter ToVideoProcessorFilter(FLFilters filter) => filter switch
     {
-        FLFilters.Brightness    => VideoProcessorFilter.Brightness,
-        FLFilters.Contrast      => VideoProcessorFilter.Contrast,
-        FLFilters.Hue           => VideoProcessorFilter.Hue,
-        FLFilters.Saturation    => VideoProcessorFilter.Saturation,
+        FLFilters.Brightness => VideoProcessorFilter.Brightness,
+        FLFilters.Contrast => VideoProcessorFilter.Contrast,
+        FLFilters.Hue => VideoProcessorFilter.Hue,
+        FLFilters.Saturation => VideoProcessorFilter.Saturation,
         _ => default,
     };
 }
@@ -118,15 +118,15 @@ public class FLFilter : NotifyPropertyChanged
 {   // TBR: Publics that currently required for Serialization
 
     [JsonIgnore]
-    public bool         Available   => true; // TBR: FL always available
-    public FLFilters    Filter      { get; set; }
-    public int          Minimum     { get; set; }
-    public float        MinimumPS   { get; set; }
-    public int          Maximum     { get; set; }
-    public float        MaximumPS   { get; set; }
-    public float        Step        { get; set; }
-    public int          Default     { get; set; }
-    public int          Value       { get => _Value; set { if (Set(ref _Value, value)) renderer?.FLSetFilter(this, true); }}
+    public bool Available => true; // TBR: FL always available
+    public FLFilters Filter { get; set; }
+    public int Minimum { get; set; }
+    public float MinimumPS { get; set; }
+    public int Maximum { get; set; }
+    public float MaximumPS { get; set; }
+    public float Step { get; set; }
+    public int Default { get; set; }
+    public int Value { get => _Value; set { if (Set(ref _Value, value)) renderer?.FLSetFilter(this, true); } }
     protected int _Value;
 
     Renderer renderer;
@@ -135,13 +135,13 @@ public class FLFilter : NotifyPropertyChanged
 
     internal FLFilter(Renderer renderer, FLFilterSpec filterSpec)
     {
-        Filter      = filterSpec.Filter;
-        Minimum     = filterSpec.Minimum;
-        MinimumPS   = filterSpec.MinimumPS;
-        Maximum     = filterSpec.Maximum;
-        MaximumPS   = filterSpec.MaximumPS;
-        Step        = filterSpec.Step;
-        Default     = Value = filterSpec.Default;
+        Filter = filterSpec.Filter;
+        Minimum = filterSpec.Minimum;
+        MinimumPS = filterSpec.MinimumPS;
+        Maximum = filterSpec.Maximum;
+        MaximumPS = filterSpec.MaximumPS;
+        Step = filterSpec.Step;
+        Default = Value = filterSpec.Default;
         this.renderer = renderer;
     }
 
@@ -200,11 +200,11 @@ public class FLFilter : NotifyPropertyChanged
     internal class FLFilterSpec
     {
         public FLFilters Filter;
-        public int      Default;
-        public float    Step;
-        public int      Minimum;
-        public float    MinimumPS;
-        public int      Maximum;
-        public float    MaximumPS;
+        public int Default;
+        public float Step;
+        public int Minimum;
+        public float MinimumPS;
+        public int Maximum;
+        public float MaximumPS;
     }
 }

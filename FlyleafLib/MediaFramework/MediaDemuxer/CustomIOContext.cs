@@ -2,9 +2,9 @@
 
 public unsafe class CustomIOContext
 {
-    AVIOContext*    avioCtx;
-    public Stream   stream;
-    readonly Demuxer         demuxer;
+    AVIOContext* avioCtx;
+    public Stream stream;
+    readonly Demuxer demuxer;
 
     public CustomIOContext(Demuxer demuxer)
     {
@@ -19,7 +19,7 @@ public unsafe class CustomIOContext
         ioread = IORead;
         ioseek = IOSeek;
         avioCtx = avio_alloc_context((byte*)av_malloc((nuint)demuxer.Config.IOStreamBufferSize), demuxer.Config.IOStreamBufferSize, 0, null, ioread, null, ioseek);
-        demuxer.FormatContext->pb     = avioCtx;
+        demuxer.FormatContext->pb = avioCtx;
         demuxer.FormatContext->flags |= FmtFlags2.CustomIo;
     }
 
@@ -30,14 +30,14 @@ public unsafe class CustomIOContext
             av_free(avioCtx->buffer);
             fixed (AVIOContext** ptr = &avioCtx) avio_context_free(ptr);
         }
-        avioCtx= null;
+        avioCtx = null;
         stream = null;
         ioread = null;
         ioseek = null;
     }
 
-    avio_alloc_context_read_packet  ioread;
-    avio_alloc_context_seek         ioseek;
+    avio_alloc_context_read_packet ioread;
+    avio_alloc_context_seek ioseek;
 
     int IORead(void* opaque, byte* buffer, int bufferSize)
     {
@@ -84,7 +84,7 @@ public unsafe class CustomIOContext
 
             return whence == IOSeekFlags.Size
                 ? demuxer.CustomIOContext.stream.Length
-                : demuxer.CustomIOContext.stream.Seek(offset, (SeekOrigin) whence);
+                : demuxer.CustomIOContext.stream.Seek(offset, (SeekOrigin)whence);
         }
         catch (Exception e)
         {

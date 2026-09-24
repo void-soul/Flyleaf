@@ -6,9 +6,9 @@ namespace FlyleafLib.MediaFramework.MediaFrame;
 
 public unsafe class VideoFrame : FrameBase
 {
-    public ID3D11Texture2D[]                Texture;    // Planes (we just keep them alive for SRVs - not used anywhere*)
-    public ID3D11ShaderResourceView[]       SRV;        // Views (FlyleafVP)
-    public ID3D11VideoProcessorInputView    VPIV;       // Views (D3D11VP)
+    public ID3D11Texture2D[] Texture;    // Planes (we just keep them alive for SRVs - not used anywhere*)
+    public ID3D11ShaderResourceView[] SRV;        // Views (FlyleafVP)
+    public ID3D11VideoProcessorInputView VPIV;       // Views (D3D11VP)
     public AVFrame* AVFrame;                            // HW Decoded only - to keep the extra ref alive
 
     public VideoFrame Prev, Next;
@@ -22,10 +22,10 @@ public unsafe class VideoFrame : FrameBase
 
         if (AVFrame != null)
         {
-            fixed(AVFrame** ptr = &AVFrame) av_frame_free(ptr);
+            fixed (AVFrame** ptr = &AVFrame) av_frame_free(ptr);
             AVFrame = null;
         }
-            
+
     }
 
     public void DisposeTexture()

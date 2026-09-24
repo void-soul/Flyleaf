@@ -4,52 +4,52 @@ namespace FlyleafLib.MediaFramework.MediaStream;
 
 public abstract unsafe class StreamBase : NotifyPropertyChanged
 {
-    public ExternalStream               ExternalStream      { get; set; }
+    public ExternalStream ExternalStream { get; set; }
 
-    public Demuxer                      Demuxer             { get; internal set; }
-    public AVStream*                    AVStream            { get; internal set; }
-    internal playlist*                  HLSPlaylist         { get; set; }
-    public int                          StreamIndex         { get; internal set; } = -1;
-    public double                       Timebase            { get; internal set; }
+    public Demuxer Demuxer { get; internal set; }
+    public AVStream* AVStream { get; internal set; }
+    internal playlist* HLSPlaylist { get; set; }
+    public int StreamIndex { get; internal set; } = -1;
+    public double Timebase { get; internal set; }
 
     // TBR: To update Pop-up menu's (Player.Audio/Player.Video ... should inherit this?)
-    public bool                         Enabled             { get => _Enabled; internal set => SetUI(ref _Enabled, value); }
+    public bool Enabled { get => _Enabled; internal set => SetUI(ref _Enabled, value); }
     bool _Enabled;
 
-    public long                         BitRate             { get; internal set; }
-    public Language                     Language            { get; internal set; }
-    public string                       Title               { get; internal set; }
-    public string                       Codec               { get; internal set; }
+    public long BitRate { get; internal set; }
+    public Language Language { get; internal set; }
+    public string Title { get; internal set; }
+    public string Codec { get; internal set; }
 
-    public AVCodecID                    CodecID             { get; internal set; }
-    public long                         StartTime           { get; internal set; }
-    public long                         StartTimePts        { get; internal set; }
-    public long                         Duration            { get; internal set; }
-    public Dictionary<string, string>   Metadata            { get; internal set; } = [];
-    public MediaType                    Type                { get; internal set; }
+    public AVCodecID CodecID { get; internal set; }
+    public long StartTime { get; internal set; }
+    public long StartTimePts { get; internal set; }
+    public long Duration { get; internal set; }
+    public Dictionary<string, string> Metadata { get; internal set; } = [];
+    public MediaType Type { get; internal set; }
 
     protected AVCodecParameters* cp;
 
     public StreamBase(Demuxer demuxer, AVStream* st)
     {
-        Demuxer     = demuxer;
-        AVStream    = st;
-        cp          = st->codecpar;
-        BitRate     = cp->bit_rate;
-        CodecID     = cp->codec_id;
-        Codec       = avcodec_get_name(cp->codec_id);
+        Demuxer = demuxer;
+        AVStream = st;
+        cp = st->codecpar;
+        BitRate = cp->bit_rate;
+        CodecID = cp->codec_id;
+        Codec = avcodec_get_name(cp->codec_id);
         StreamIndex = AVStream->index;
-        Timebase    = av_q2d(AVStream->time_base) * 10000.0 * 1000.0;
-        
+        Timebase = av_q2d(AVStream->time_base) * 10000.0 * 1000.0;
+
         if (AVStream->start_time != NoTs)
         {
-            StartTimePts= AVStream->start_time;
-            StartTime   = Demuxer.hlsCtx == null ? (long)(AVStream->start_time * Timebase) : Demuxer.StartTime;
+            StartTimePts = AVStream->start_time;
+            StartTime = Demuxer.hlsCtx == null ? (long)(AVStream->start_time * Timebase) : Demuxer.StartTime;
         }
         else
         {
-            StartTime   = Demuxer.StartTime;
-            StartTimePts= av_rescale_q(StartTime/10, Engine.FFmpeg.AV_TIMEBASE_Q, AVStream->time_base);
+            StartTime = Demuxer.StartTime;
+            StartTimePts = av_rescale_q(StartTime / 10, Engine.FFmpeg.AV_TIMEBASE_Q, AVStream->time_base);
         }
 
         UpdateMetadata();
@@ -63,8 +63,8 @@ public abstract unsafe class StreamBase : NotifyPropertyChanged
     {
         if (AVStream->start_time != NoTs && Demuxer.hlsCtx == null)
         {
-            StartTimePts= AVStream->start_time;
-            StartTime   = (long)(StartTimePts * Timebase);
+            StartTimePts = AVStream->start_time;
+            StartTime = (long)(StartTimePts * Timebase);
         }
 
         if (AVStream->duration != NoTs)
@@ -88,7 +88,7 @@ public abstract unsafe class StreamBase : NotifyPropertyChanged
         for (int i = 0; i < Demuxer.hlsCtx->n_playlists; i++)
         {
             playlist** playlists = Demuxer.hlsCtx->playlists;
-            for (int l=0; l<playlists[i]->n_main_streams; l++)
+            for (int l = 0; l < playlists[i]->n_main_streams; l++)
                 if (playlists[i]->main_streams[l]->index == StreamIndex)
                 {
                     Demuxer.Log.Debug($"Stream #{StreamIndex} Found in playlist {i}");
@@ -129,13 +129,13 @@ public abstract unsafe class StreamBase : NotifyPropertyChanged
         string dump = $"[{Type,-5} #{StreamIndex:D2}]";
         if (Language.OriginalInput != null)
             dump += $" ({Language.OriginalInput})";
-        
+
         if (StartTime != NoTs || Duration != NoTs)
         {
             dump += "\r\n\t[Time	 ] ";
             dump += StartTimePts != NoTs ? $"{TicksToTime(StartTime)} ({StartTimePts})" : "-";
             dump += " / ";
-            dump += AVStream->duration != NoTs ? $"{TicksToTime(Duration)} ({AVStream->duration})": "-";
+            dump += AVStream->duration != NoTs ? $"{TicksToTime(Duration)} ({AVStream->duration})" : "-";
             dump += $" | tb: {AVStream->time_base}";
         }
 
@@ -161,7 +161,7 @@ public abstract unsafe class StreamBase : NotifyPropertyChanged
 
         if (Metadata.Count > 0)
             dump += $"\r\n{GetDumpMetadata(Metadata, "language")}";
-        
+
         return dump;
     }
 }

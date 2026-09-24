@@ -14,7 +14,7 @@ public class RelayCommand : ICommand
 
     public RelayCommand(Action<object> execute, Predicate<object> canExecute)
     {
-        this.execute    = execute ?? throw new ArgumentNullException("execute");
+        this.execute = execute ?? throw new ArgumentNullException("execute");
         this.canExecute = canExecute ?? throw new ArgumentNullException("canExecute");
     }
 
@@ -42,7 +42,7 @@ public class RelayCommand : ICommand
     {
         var handler = CanExecuteChangedInternal;
         handler?.Invoke(this, EventArgs.Empty);
-         //CommandManager.InvalidateRequerySuggested();
+        //CommandManager.InvalidateRequerySuggested();
     }
 
     public void Destroy()
